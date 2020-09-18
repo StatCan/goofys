@@ -88,7 +88,7 @@ func (c *S3Config) ToAwsConfig(flags *FlagStorage) (*aws.Config, error) {
 		}
 
 		if c.CredFilename != "" {
-			c.Credentials = credentials.NewSharedCredentials(c.CredFilename, c.Profile)
+			c.Credentials = NewExpiringSharedCredentials(c.CredFilename, c.Profile)
 		}
 	}
 	if flags.Endpoint != "" {
