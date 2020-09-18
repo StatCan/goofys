@@ -171,6 +171,11 @@ func NewApp() (app *cli.App) {
 			},
 
 			cli.StringFlag{
+				Name:  "cred-filename",
+				Usage: "Credentials filename.",
+			},
+
+			cli.StringFlag{
 				Name:  "profile",
 				Usage: "Use a named profile from $HOME/.aws/credentials instead of \"default\"",
 			},
@@ -371,6 +376,7 @@ func PopulateFlags(c *cli.Context) (ret *FlagStorage) {
 		config.SseC = c.String("sse-c")
 		config.ACL = c.String("acl")
 		config.Subdomain = c.Bool("subdomain")
+		config.CredFilename = c.String("cred-filename")
 
 		// KMS implies SSE
 		if config.UseKMS {
