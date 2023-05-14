@@ -7,6 +7,9 @@
 
 # Overview
 
+Goofys-blkread is a fork of Goofys with a read cache that aggressively
+prefetches large data blocks. Enable this cache by `--block-read-cache`.
+
 Goofys allows you to mount an S3 bucket as a filey system.
 
 It's a Filey System instead of a File System because goofys strives
