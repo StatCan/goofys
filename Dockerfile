@@ -50,6 +50,3 @@ COPY --from=goofys-builder /goofys/goofys .
 # Get fusermount3-proxy from the build stage and set up symlink
 COPY --from=fusermount3-proxy-builder /bin/fusermount3-proxy /bin/fusermount3
 RUN ln -sf /bin/fusermount3 /bin/fusermount
-
-# Set the entry point to the MinIO configuration script (optional)
-ENTRYPOINT ["/configure_minio.sh"]
