@@ -21,7 +21,7 @@ RUN make build
 FROM alpine:latest
 
 # Install necessary runtime dependencies
-RUN apk --no-cache add ca-certificates fuse3
+RUN apk --no-cache add ca-certificates fuse3 bash
 
 # Download MinIO client (mc)
 RUN apk add wget && \
