@@ -21,7 +21,7 @@ RUN make build
 FROM alpine:latest
 
 # Install necessary runtime dependencies
-RUN apk --no-cache add ca-certificates fuse3 bash fuse-openrc openrc wget
+RUN apk --no-cache add ca-certificates bash wget
 
 # Download MinIO client (mc)
 RUN wget https://dl.min.io/client/mc/release/linux-amd64/mc -O /usr/bin/mc && \
@@ -47,5 +47,5 @@ RUN chmod +x /configure_minio.sh
 COPY --from=goofys-builder /goofys/goofys .
 
 # Get fusermount3-proxy from the build stage and set up symlink
-COPY --from=fusermount3-proxy-builder /bin/fusermount3-proxy /bin/fusermount3
-RUN ln -sf /bin/fusermount3 /bin/fusermount
+COPY --from=fusermount3-proxy-builder /bin/fusermount3-proxy /usr/bin/fusermount3
+RUN ln -sf /usr/bin/fusermount3 /bin/fusermount
