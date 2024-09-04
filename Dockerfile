@@ -1,7 +1,7 @@
 FROM golang:1.23.0-alpine AS fusermount3-proxy-builder
 
 # Install required build dependencies
-RUN apk --no-cache add make gcc g++ libc-dev fuse-dev
+RUN apk update && apk upgrade && apk --no-cache add make gcc g++ libc-dev fuse-dev
 
 WORKDIR /meta-fuse-csi-plugin
 ADD ./meta-fuse-csi-plugin .
@@ -11,7 +11,7 @@ RUN make fusermount3-proxy BINDIR=/bin
 FROM golang:1.23.0-alpine AS goofys-builder
 
 # Install required build dependencies
-RUN apk --no-cache add git make gcc g++ libc-dev fuse-dev
+RUN apk update && apk upgrade && apk --no-cache add git make gcc g++ libc-dev fuse-dev
 
 WORKDIR /goofys
 ADD . .
@@ -21,7 +21,7 @@ RUN make build
 FROM alpine:latest
 
 # Install necessary runtime dependencies
-RUN apk --no-cache add ca-certificates bash wget
+RUN apk update && apk upgrade && apk --no-cache add ca-certificates bash wget
 
 # Download MinIO client (mc)
 RUN wget https://dl.min.io/client/mc/release/linux-amd64/mc -O /usr/bin/mc && \
