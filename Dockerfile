@@ -1,4 +1,4 @@
-FROM golang:1.23.0-alpine AS fusermount3-proxy-builder
+FROM golang:1.20.7-alpine AS fusermount3-proxy-builder
 
 # Install required build dependencies
 RUN apk update && apk upgrade && apk --no-cache add make gcc g++ libc-dev fuse-dev
@@ -8,7 +8,7 @@ ADD ./meta-fuse-csi-plugin .
 # Build the fusermount3-proxy
 RUN make fusermount3-proxy BINDIR=/bin
 
-FROM golang:1.23.0-alpine AS goofys-builder
+FROM golang:1.20.7-alpine AS goofys-builder
 
 # Install required build dependencies
 RUN apk update && apk upgrade && apk --no-cache add git make gcc g++ libc-dev fuse-dev
@@ -18,7 +18,8 @@ ADD . .
 # Build the goofys app
 RUN make build
 
-FROM alpine:latest
+# 3.20.3 is the latest as of this commit (September 09 2024)
+FROM alpine:3.20.3
 
 # Install necessary runtime dependencies
 RUN apk update && apk upgrade && apk --no-cache add ca-certificates bash wget
@@ -35,7 +36,7 @@ EOF
 
 # Copy and configure MinIO
 COPY <<EOF /configure_minio.sh
-#!/bin/sh
+#!/bin/bash
 set -eux
 /usr/bin/mc alias set k8s-minio-dev http://localhost:9000 minioadmin minioadmin
 /usr/bin/mc mb k8s-minio-dev/test-bucket
