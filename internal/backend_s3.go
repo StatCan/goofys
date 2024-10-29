@@ -223,6 +223,7 @@ func (s *S3Backend) detectBucketLocationByHEAD() (err error, isAws bool) {
 
 func (s *S3Backend) testBucket(key string) (err error) {
 	s3Log.Debugf("jose: inside testBucket")
+	// dies at headblob
 	_, err = s.HeadBlob(&HeadBlobInput{Key: key})
 	if err != nil {
 		if err == fuse.ENOENT {
@@ -284,7 +285,8 @@ func (s *S3Backend) Init(key string) error {
 				}
 				err = s.testBucket(key)
 				s3Log.Debugf("jose: after test bucket:%v", err)
-			}
+			} // this if isnt used
+			// we see below
 			s3Log.Debugf("jose ending !isAws")
 		}
 		if err != nil { // never reached
@@ -366,6 +368,7 @@ func (s *S3Backend) getRequestId(r *request.Request) string {
 		r.HTTPResponse.Header.Get("x-amz-id-2")
 }
 
+// dies here
 func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 	head := s3.HeadObjectInput{Bucket: &s.bucket,
 		Key: &param.Key,
@@ -379,8 +382,10 @@ func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 	req, resp := s.S3.HeadObjectRequest(&head)
 	err := req.Send()
 	if err != nil {
+		s3Log.Debugf("jose: headblob 1: %v", err)
 		return nil, mapAwsError(err)
 	}
+	s3Log.Debugf("jose: headblob 2")
 	return &HeadBlobOutput{
 		BlobItemOutput: BlobItemOutput{
 			Key:          &param.Key,
