@@ -142,6 +142,7 @@ func (s *S3Backend) detectBucketLocationByHEAD() (err error, isAws bool) {
 	if s.awsConfig.Endpoint != nil {
 		endpoint, err := url.Parse(*s.awsConfig.Endpoint)
 		if err != nil {
+			log.Infof("Failed in deteckBucketLocationByHead 1:%v", err)
 			return err, false
 		}
 
@@ -154,6 +155,7 @@ func (s *S3Backend) detectBucketLocationByHEAD() (err error, isAws bool) {
 
 	req, err = http.NewRequest("HEAD", u.String(), nil)
 	if err != nil {
+		log.Infof("Failed in deteckBucketLocationByHead 2:%v", err)
 		return
 	}
 
@@ -161,6 +163,7 @@ func (s *S3Backend) detectBucketLocationByHEAD() (err error, isAws bool) {
 	for i := 0; i < allowFails; i++ {
 		resp, err = http.DefaultTransport.RoundTrip(req)
 		if err != nil {
+			log.Infof("Failed in deteckBucketLocationByHead 3:%v", err)
 			return
 		}
 		if resp.StatusCode < 500 {
@@ -214,7 +217,7 @@ func (s *S3Backend) detectBucketLocationByHEAD() (err error, isAws bool) {
 		// we detected a region, this is aws, the error is irrelevant
 		err = nil
 	}
-
+	log.Infof("made it to end of deteckBucketLocationByHead!:%v", err)
 	return
 }
 
@@ -245,6 +248,7 @@ func (s *S3Backend) Init(key string) error {
 	var err error
 
 	if !s.config.RegionSet {
+		//
 		err, isAws = s.detectBucketLocationByHEAD()
 		if err == nil {
 			// we detected a region header, this is probably AWS S3,
