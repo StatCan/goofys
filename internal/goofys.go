@@ -205,7 +205,7 @@ func newGoofys(ctx context.Context, bucket string, flags *FlagStorage,
 	randomObjectName := prefix + (RandStringBytesMaskImprSrc(32))
 	err = cloud.Init(randomObjectName)
 	if err != nil {
-		log.Errorf("Unable to access '%v': %v", bucket, err)
+		log.Errorf("Unable to access '%v': %v", bucket, err) // last thing we see
 		return nil
 	}
 	go cloud.MultipartExpire(&MultipartExpireInput{})

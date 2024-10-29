@@ -215,13 +215,13 @@ type MakeBucketOutput struct {
 	RequestId string
 }
 
-/// Implementations of all the functions here are expected to be
-/// concurrency-safe, except for
-///
-/// Init() is called exactly once before any other functions are
-/// called.
-///
-/// Capabilities()/Bucket() are expected to be const
+// / Implementations of all the functions here are expected to be
+// / concurrency-safe, except for
+// /
+// / Init() is called exactly once before any other functions are
+// / called.
+// /
+// / Capabilities()/Bucket() are expected to be const
 type StorageBackend interface {
 	Init(key string) error
 	Capabilities() *Capabilities
@@ -343,6 +343,7 @@ func (s *StorageBackendInitWrapper) Init(key string) error {
 	s.init.Do(func() {
 		s.initErr = s.StorageBackend.Init(s.initKey)
 		if s.initErr != nil {
+			s3Log.Debugf("jose: error in init")
 			log.Errorf("%T Init: %v", s.StorageBackend, s.initErr)
 			s.StorageBackend = StorageBackendInitError{
 				s.initErr,

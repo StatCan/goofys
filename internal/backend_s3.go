@@ -222,6 +222,7 @@ func (s *S3Backend) detectBucketLocationByHEAD() (err error, isAws bool) {
 }
 
 func (s *S3Backend) testBucket(key string) (err error) {
+	s3Log.Debugf("jose: inside testBucket")
 	_, err = s.HeadBlob(&HeadBlobInput{Key: key})
 	if err != nil {
 		if err == fuse.ENOENT {
@@ -284,13 +285,14 @@ func (s *S3Backend) Init(key string) error {
 				err = s.testBucket(key)
 				s3Log.Debugf("jose: after test bucket:%v", err)
 			}
+			s3Log.Debugf("jose ending !isAws")
 		}
 		if err != nil { // never reached
 			s3Log.Debugf("jose: Error not nilt:%v", err)
 			return err
 		}
 	} //
-	s3Log.Debugf("Ending init of backend_s3")
+	s3Log.Debugf("jose: Ending init of backend_s3")
 	return nil
 }
 
