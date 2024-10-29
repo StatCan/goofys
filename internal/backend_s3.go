@@ -155,7 +155,7 @@ func (s *S3Backend) detectBucketLocationByHEAD() (err error, isAws bool) {
 
 	req, err = http.NewRequest("HEAD", u.String(), nil)
 	if err != nil {
-		s3Log.Debugf("Failed in deteckBucketLocationByHead 2:%v", err)
+		s3Log.Debugf("jose: Failed in deteckBucketLocationByHead 2:%v", err)
 		return
 	}
 
@@ -163,7 +163,7 @@ func (s *S3Backend) detectBucketLocationByHEAD() (err error, isAws bool) {
 	for i := 0; i < allowFails; i++ {
 		resp, err = http.DefaultTransport.RoundTrip(req)
 		if err != nil {
-			s3Log.Debugf("Failed in deteckBucketLocationByHead 3:%v", err)
+			s3Log.Debugf("jose: Failed in %v, deteckBucketLocationByHead 3:%v", i, err)
 			return
 		}
 		if resp.StatusCode < 500 {
@@ -217,7 +217,7 @@ func (s *S3Backend) detectBucketLocationByHEAD() (err error, isAws bool) {
 		// we detected a region, this is aws, the error is irrelevant
 		err = nil
 	}
-	s3Log.Debugf("made it to end of deteckBucketLocationByHead!:%v", err)
+	s3Log.Debugf("jose: made it to end of deteckBucketLocationByHead!:%v", err)
 	return
 }
 
@@ -266,7 +266,7 @@ func (s *S3Backend) Init(key string) error {
 				s3Log.Errorf("Unable to access '%v': %v", s.bucket, err)
 			}
 		}
-	}
+	} // not an AWS so keep going
 
 	// try again with the credential to make sure
 	err = s.testBucket(key)
@@ -282,14 +282,14 @@ func (s *S3Backend) Init(key string) error {
 					return err
 				}
 				err = s.testBucket(key)
+				s3Log.Debugf("jose: after test bucket:%v", err)
 			}
 		}
-
-		if err != nil {
-			s3Log.Debugf("Error not nilt:%v", err)
+		if err != nil { // never reached
+			s3Log.Debugf("jose: Error not nilt:%v", err)
 			return err
 		}
-	}
+	} //
 	s3Log.Debugf("Ending init of backend_s3")
 	return nil
 }
