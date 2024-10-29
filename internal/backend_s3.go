@@ -142,7 +142,7 @@ func (s *S3Backend) detectBucketLocationByHEAD() (err error, isAws bool) {
 	if s.awsConfig.Endpoint != nil {
 		endpoint, err := url.Parse(*s.awsConfig.Endpoint)
 		if err != nil {
-			log.Infof("Failed in deteckBucketLocationByHead 1:%v", err)
+			s3Log.Debugf("Failed in deteckBucketLocationByHead 1:%v", err)
 			return err, false
 		}
 
@@ -155,7 +155,7 @@ func (s *S3Backend) detectBucketLocationByHEAD() (err error, isAws bool) {
 
 	req, err = http.NewRequest("HEAD", u.String(), nil)
 	if err != nil {
-		log.Infof("Failed in deteckBucketLocationByHead 2:%v", err)
+		s3Log.Debugf("Failed in deteckBucketLocationByHead 2:%v", err)
 		return
 	}
 
@@ -163,7 +163,7 @@ func (s *S3Backend) detectBucketLocationByHEAD() (err error, isAws bool) {
 	for i := 0; i < allowFails; i++ {
 		resp, err = http.DefaultTransport.RoundTrip(req)
 		if err != nil {
-			log.Infof("Failed in deteckBucketLocationByHead 3:%v", err)
+			s3Log.Debugf("Failed in deteckBucketLocationByHead 3:%v", err)
 			return
 		}
 		if resp.StatusCode < 500 {
@@ -217,7 +217,7 @@ func (s *S3Backend) detectBucketLocationByHEAD() (err error, isAws bool) {
 		// we detected a region, this is aws, the error is irrelevant
 		err = nil
 	}
-	log.Infof("made it to end of deteckBucketLocationByHead!:%v", err)
+	s3Log.Debugf("made it to end of deteckBucketLocationByHead!:%v", err)
 	return
 }
 
@@ -246,9 +246,9 @@ func (s *S3Backend) fallbackV2Signer() (err error) {
 func (s *S3Backend) Init(key string) error {
 	var isAws bool
 	var err error
-
+	s3Log.Debugf("Init")
 	if !s.config.RegionSet {
-		//
+		s3Log.Debugf("!RegionSet")
 		err, isAws = s.detectBucketLocationByHEAD()
 		if err == nil {
 			// we detected a region header, this is probably AWS S3,
@@ -256,11 +256,13 @@ func (s *S3Backend) Init(key string) error {
 			s.newS3()
 			s.aws = isAws
 		} else if err == syscall.ENXIO {
+			s3Log.Debugf("ENXIO error")
 			return fmt.Errorf("bucket %v does not exist", s.bucket)
 		} else {
 			// this is NOT AWS, we expect the request to fail with 403 if this is not
 			// an anonymous bucket
 			if err != syscall.EACCES {
+				s3Log.Debugf("EAccess Error")
 				s3Log.Errorf("Unable to access '%v': %v", s.bucket, err)
 			}
 		}
@@ -276,6 +278,7 @@ func (s *S3Backend) Init(key string) error {
 			if err == syscall.EACCES || err == fuse.EINVAL || err == syscall.EAGAIN {
 				err = s.fallbackV2Signer()
 				if err != nil {
+					s3Log.Debugf("Error in isAws:%v", err)
 					return err
 				}
 				err = s.testBucket(key)
@@ -283,10 +286,11 @@ func (s *S3Backend) Init(key string) error {
 		}
 
 		if err != nil {
+			s3Log.Debugf("Error not nilt:%v", err)
 			return err
 		}
 	}
-
+	s3Log.Debugf("Ending init of backend_s3")
 	return nil
 }
 
