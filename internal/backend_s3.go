@@ -316,9 +316,11 @@ func (s *S3Backend) ListObjectsV2(params *s3.ListObjectsV2Input) (*s3.ListObject
 		}
 		s3Log.Debugf("MATHIS TEST: objs %v, err %v", objs, err)
 		count := int64(len(objs.Contents))
+		//oh my goodness to cleanse the `Contents` would be incredibly hard since its a list, oh maybe not
+		// theres another one in MATHIS TEST: resp
 		v2Objs := s3.ListObjectsV2Output{
 			CommonPrefixes:        objs.CommonPrefixes,
-			Contents:              objs.Contents,
+			Contents:              objs.Contents, // do i need to make changes here? like before the return?
 			ContinuationToken:     objs.Marker,
 			Delimiter:             objs.Delimiter,
 			EncodingType:          objs.EncodingType,
@@ -414,15 +416,18 @@ func (s *S3Backend) ListBlobs(param *ListBlobsInput) (*ListBlobsOutput, error) {
 		prefixes = append(prefixes, BlobPrefixOutput{Prefix: p.Prefix})
 	}
 	for _, i := range resp.Contents {
+		// when is this called is this where i can escape the commma? This seems to happen after
+		// MATHIS TEST: objs but maybe this is where it matters
+		escapedCommas := strings.ReplaceAll(*i.Key, ",", "\\,")
 		items = append(items, BlobItemOutput{
-			Key:          i.Key,
+			Key:          &escapedCommas,
 			ETag:         i.ETag,
 			LastModified: i.LastModified,
 			Size:         uint64(*i.Size),
 			StorageClass: i.StorageClass,
 		})
 	}
-	s3Log.Debugf("MATHIS TEST: prefixes %v, items %v", prefixes, items)
+	s3Log.Debugf("MATHIS TEST jose: prefixes %v, items %v", prefixes, items)
 	isTruncatedFlag := false
 	if resp.IsTruncated != nil {
 		isTruncatedFlag = *resp.IsTruncated
