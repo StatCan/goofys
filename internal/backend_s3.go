@@ -418,9 +418,12 @@ func (s *S3Backend) ListBlobs(param *ListBlobsInput) (*ListBlobsOutput, error) {
 	for _, i := range resp.Contents {
 		// when is this called is this where i can escape the commma? This seems to happen after
 		// MATHIS TEST: objs but maybe this is where it matters
-		escapedCommas := strings.ReplaceAll(*i.Key, ",", "\\,")
+		//escapedCommas := strings.ReplaceAll(*i.Key, ",", "\\,")
+		encodedString := url.PathEscape(*i.Key)
 		items = append(items, BlobItemOutput{
-			Key:          &escapedCommas,
+			//Key:          &escapedCommas,
+			//Key:          i.Key,
+			Key:          &encodedString,
 			ETag:         i.ETag,
 			LastModified: i.LastModified,
 			Size:         uint64(*i.Size),
