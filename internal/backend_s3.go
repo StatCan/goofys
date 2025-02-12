@@ -368,7 +368,10 @@ func (s *S3Backend) getRequestId(r *request.Request) string {
 			Key:          &encodedString,
 */
 func encodeKey(key string) *string {
-	encodedString := url.PathEscape(key)
+	//encodedString := url.PathEscape(key)
+	// Attempt only encoding the commas, as the above results in also encoding the `/`'s
+	// leading to files getting stored at top level named; jose%2Finvalid instead of jose/invalid
+	encodedString := strings.ReplaceAll(key, ",", "%2C")
 	return &encodedString
 }
 
