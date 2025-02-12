@@ -316,8 +316,7 @@ func (s *S3Backend) ListObjectsV2(params *s3.ListObjectsV2Input) (*s3.ListObject
 		}
 		s3Log.Debugf("MATHIS TEST: objs %v, err %v", objs, err)
 		count := int64(len(objs.Contents))
-		//oh my goodness to cleanse the `Contents` would be incredibly hard since its a list, oh maybe not
-		// theres another one in MATHIS TEST: resp
+		// theres another one in MATHIS TEST: resp jose
 		v2Objs := s3.ListObjectsV2Output{
 			CommonPrefixes:        objs.CommonPrefixes,
 			Contents:              objs.Contents, // do i need to make changes here? like before the return?
@@ -376,9 +375,10 @@ func encodeKey(key string) *string {
 }
 
 func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
-	encodedKey := encodeKey(param.Key)
+	//encodedKey := encodeKey(param.Key)
 	head := s3.HeadObjectInput{Bucket: &s.bucket,
-		Key: encodedKey,
+		//Key: encodedKey,
+		Key: &param.Key,
 	}
 	if s.config.SseC != "" {
 		head.SSECustomerAlgorithm = PString("AES256")
@@ -393,7 +393,8 @@ func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 	}
 	return &HeadBlobOutput{
 		BlobItemOutput: BlobItemOutput{
-			Key:          encodedKey,
+			//Key:          encodedKey,
+			Key:          &param.Key,
 			ETag:         resp.ETag,
 			LastModified: resp.LastModified,
 			Size:         uint64(*resp.ContentLength),
@@ -448,6 +449,7 @@ func (s *S3Backend) ListBlobs(param *ListBlobsInput) (*ListBlobsOutput, error) {
 		})
 	}
 	s3Log.Debugf("MATHIS TEST jose: prefixes %v, items %v", prefixes, items)
+	// `prefixes` references folders, `items` references files
 	isTruncatedFlag := false
 	if resp.IsTruncated != nil {
 		isTruncatedFlag = *resp.IsTruncated
@@ -466,7 +468,8 @@ func (s *S3Backend) ListBlobs(param *ListBlobsInput) (*ListBlobsOutput, error) {
 func (s *S3Backend) DeleteBlob(param *DeleteBlobInput) (*DeleteBlobOutput, error) {
 	req, _ := s.DeleteObjectRequest(&s3.DeleteObjectInput{
 		Bucket: &s.bucket,
-		Key:    encodeKey(param.Key),
+		//Key:    encodeKey(param.Key),
+		Key: &param.Key,
 	})
 	err := req.Send()
 	if err != nil {
@@ -484,7 +487,7 @@ func (s *S3Backend) DeleteBlobs(param *DeleteBlobsInput) (*DeleteBlobsOutput, er
 	for i, _ := range param.Items {
 		// Jose: going to try the encode here though could get hairy
 		// will need to re-test deletes
-		objs[i] = &s3.ObjectIdentifier{Key: encodeKey(param.Items[i])}
+		objs[i] = &s3.ObjectIdentifier{Key: &param.Items[i]}
 	}
 
 	// Add list of objects to delete to Delete object
@@ -672,7 +675,7 @@ func (s *S3Backend) CopyBlob(param *CopyBlobInput) (*CopyBlobOutput, error) {
 	}
 
 	COPY_LIMIT := uint64(5 * 1024 * 1024 * 1024)
-	sourceParamKey := url.PathEscape(param.Source)
+	sourceParamKey := param.Source
 	if param.Size == nil || param.ETag == nil || (*param.Size > COPY_LIMIT &&
 		(param.Metadata == nil || param.StorageClass == nil)) {
 
@@ -713,7 +716,7 @@ func (s *S3Backend) CopyBlob(param *CopyBlobInput) (*CopyBlobOutput, error) {
 	params := &s3.CopyObjectInput{
 		Bucket:            &s.bucket,
 		CopySource:        aws.String(url.QueryEscape(from)),
-		Key:               encodeKey(param.Destination),
+		Key:               &param.Destination,
 		StorageClass:      param.StorageClass,
 		ContentType:       s.flags.GetMimeType(param.Destination),
 		Metadata:          metadataToLower(param.Metadata),
@@ -757,10 +760,11 @@ func (s *S3Backend) CopyBlob(param *CopyBlobInput) (*CopyBlobOutput, error) {
 }
 
 func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
-	encodedKey := encodeKey(param.Key)
+	//encodedKey := encodeKey(param.Key)
 	get := s3.GetObjectInput{
 		Bucket: &s.bucket,
-		Key:    encodedKey,
+		Key:    &param.Key,
+		//Key:    encodedKey,
 	}
 
 	if s.config.SseC != "" {
@@ -789,7 +793,8 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 	return &GetBlobOutput{
 		HeadBlobOutput: HeadBlobOutput{
 			BlobItemOutput: BlobItemOutput{
-				Key:          encodedKey,
+				// Key:          encodedKey,
+				Key:          &param.Key,
 				ETag:         resp.ETag,
 				LastModified: resp.LastModified,
 				Size:         uint64(*resp.ContentLength),
@@ -823,8 +828,9 @@ func (s *S3Backend) PutBlob(param *PutBlobInput) (*PutBlobOutput, error) {
 	}
 
 	put := &s3.PutObjectInput{
-		Bucket:       &s.bucket,
-		Key:          encodeKey(param.Key),
+		Bucket: &s.bucket,
+		//Key:          encodeKey(param.Key),
+		Key:          &param.Key,
 		Metadata:     metadataToLower(param.Metadata),
 		Body:         param.Body,
 		StorageClass: &storageClass,
