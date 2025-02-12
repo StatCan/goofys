@@ -437,11 +437,11 @@ func (s *S3Backend) ListBlobs(param *ListBlobsInput) (*ListBlobsOutput, error) {
 		// when is this called is this where i can escape the commma? This seems to happen after
 		// MATHIS TEST: objs but maybe this is where it matters
 		//escapedCommas := strings.ReplaceAll(*i.Key, ",", "\\,")
-		encodedKey := encodeKey(*i.Key)
+		//encodedKey := encodeKey(*i.Key)
 		items = append(items, BlobItemOutput{
 			//Key:          &escapedCommas,
-			//Key:          i.Key,
-			Key:          encodedKey,
+			Key: i.Key,
+			//Key:          encodedKey,
 			ETag:         i.ETag,
 			LastModified: i.LastModified,
 			Size:         uint64(*i.Size),
@@ -676,6 +676,7 @@ func (s *S3Backend) CopyBlob(param *CopyBlobInput) (*CopyBlobOutput, error) {
 
 	COPY_LIMIT := uint64(5 * 1024 * 1024 * 1024)
 	sourceParamKey := param.Source
+	//trings.ReplaceAll(key, ",", "%2C")
 	if param.Size == nil || param.ETag == nil || (*param.Size > COPY_LIMIT &&
 		(param.Metadata == nil || param.StorageClass == nil)) {
 
@@ -760,11 +761,11 @@ func (s *S3Backend) CopyBlob(param *CopyBlobInput) (*CopyBlobOutput, error) {
 }
 
 func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
-	//encodedKey := encodeKey(param.Key)
+	encodedKey := encodeKey(param.Key)
 	get := s3.GetObjectInput{
 		Bucket: &s.bucket,
-		Key:    &param.Key,
-		//Key:    encodedKey,
+		//Key:    &param.Key,
+		Key: encodedKey,
 	}
 
 	if s.config.SseC != "" {
@@ -789,11 +790,12 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 	if err != nil {
 		return nil, mapAwsError(err)
 	}
+	s3Log.Debugf("MATHIS TEST jose getblob: req %v, resp %v", req, resp)
 
 	return &GetBlobOutput{
 		HeadBlobOutput: HeadBlobOutput{
 			BlobItemOutput: BlobItemOutput{
-				// Key:          encodedKey,
+				//Key: encodedKey, // should this be encoded?
 				Key:          &param.Key,
 				ETag:         resp.ETag,
 				LastModified: resp.LastModified,
