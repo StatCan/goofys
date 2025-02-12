@@ -764,8 +764,8 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 	encodedKey := encodeKey(param.Key)
 	get := s3.GetObjectInput{
 		Bucket: &s.bucket,
-		//Key:    &param.Key,
-		Key: encodedKey,
+		Key:    &param.Key,
+		//Key: encodedKey,
 	}
 
 	if s.config.SseC != "" {
@@ -787,6 +787,7 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 
 	req, resp := s.GetObjectRequest(&get)
 	err := req.Send()
+	s3Log.Debugf("MATHIS TEST jose getblob before error: req %v, resp %v", req, resp)
 	if err != nil {
 		return nil, mapAwsError(err)
 	}
@@ -795,8 +796,8 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 	return &GetBlobOutput{
 		HeadBlobOutput: HeadBlobOutput{
 			BlobItemOutput: BlobItemOutput{
-				//Key: encodedKey, // should this be encoded?
-				Key:          &param.Key,
+				Key: encodedKey, // should this be encoded?
+				//Key:          &param.Key,
 				ETag:         resp.ETag,
 				LastModified: resp.LastModified,
 				Size:         uint64(*resp.ContentLength),
