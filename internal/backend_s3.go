@@ -291,7 +291,8 @@ func (s *S3Backend) ListObjectsV2(params *s3.ListObjectsV2Input) (*s3.ListObject
 	if s.aws {
 		req, resp := s.S3.ListObjectsV2Request(params)
 		err := req.Send()
-		s3Log.Debugf("MATHIS TEST list: req %v, resp %v", req, resp)
+		s3Log.Debugf("MATHIS TEST list: req body %v, req data %v, req signed %v, req.req %v, req params %v, resp %v",
+			req.Body, req.Data, req.SignedHeaderVals, req.HTTPRequest, req.Params, resp)
 		if err != nil {
 			return nil, "", err
 		}
@@ -788,11 +789,12 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 
 	req, resp := s.GetObjectRequest(&get)
 	err := req.Send()
-	s3Log.Debugf("MATHIS TEST jose getblob before error: req %v, resp %v", req, resp)
+	s3Log.Debugf("MATHIS TEST jose getblob before error: req body %v, req data %v, req signed %v, req.req %v, req params %v, resp %v",
+		req.Body, req.Data, req.SignedHeaderVals, req.HTTPRequest, req.Params, resp)
 	if err != nil {
 		return nil, mapAwsError(err)
 	}
-	s3Log.Debugf("MATHIS TEST jose getblob: req %v, resp %v", req, resp)
+	//s3Log.Debugf("MATHIS TEST jose getblob: req %v, resp %v", req, resp)
 
 	return &GetBlobOutput{
 		HeadBlobOutput: HeadBlobOutput{
