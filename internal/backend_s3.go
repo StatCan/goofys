@@ -291,6 +291,7 @@ func (s *S3Backend) ListObjectsV2(params *s3.ListObjectsV2Input) (*s3.ListObject
 	if s.aws {
 		req, resp := s.S3.ListObjectsV2Request(params)
 		err := req.Send()
+		s3Log.Debugf("MATHIS TEST list: req %v, resp %v", req, resp)
 		if err != nil {
 			return nil, "", err
 		}
@@ -311,10 +312,10 @@ func (s *S3Backend) ListObjectsV2(params *s3.ListObjectsV2Input) (*s3.ListObject
 		}
 
 		objs, err := s.S3.ListObjects(&v1)
+		s3Log.Debugf("MATHIS TEST: objs %v, err %v", objs, err)
 		if err != nil {
 			return nil, "", err
 		}
-		s3Log.Debugf("MATHIS TEST: objs %v, err %v", objs, err)
 		count := int64(len(objs.Contents))
 		// theres another one in MATHIS TEST: resp jose
 		v2Objs := s3.ListObjectsV2Output{
