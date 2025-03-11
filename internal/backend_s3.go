@@ -798,6 +798,12 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 	}
 	//s3Log.Debugf("MATHIS TEST jose getblob: req %v, resp %v", req, resp)
 
+	// need to replicate this object not using the sdk
+	s3Log.Debugf("\nJose: DEBUG THE GETBLOB OUTPUT DATA STRUCTURE")
+	s3Log.Debugf("Etag: %v. LastModified: %v. Size: %v. StorageClass: %v. ContentType %v."+
+		"\nMetadata: %v \nBody: %v\nRequestId: %v",
+		resp.ETag, resp.LastModified, resp.ContentLength, resp.StorageClass, resp.ContentType, resp.Metadata, resp.Body,
+		s.getRequestId(req))
 	return &GetBlobOutput{
 		HeadBlobOutput: HeadBlobOutput{
 			BlobItemOutput: BlobItemOutput{
@@ -805,7 +811,7 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 				ETag:         resp.ETag,
 				LastModified: resp.LastModified,
 				Size:         uint64(*resp.ContentLength),
-				StorageClass: resp.StorageClass,
+				StorageClass: resp.StorageClass, // this is seemingly empty
 			},
 			ContentType: resp.ContentType,
 			Metadata:    metadataToLower(resp.Metadata),
