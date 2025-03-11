@@ -15,6 +15,7 @@
 package internal
 
 import (
+	"encoding/json"
 	"io"
 
 	. "github.com/StatCan/goofys/api/common"
@@ -805,18 +806,27 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 	s3Log.Debugf("Etag: %v. LastModified: %v. Size: %v. StorageClass: %v. ContentType %v."+
 		"\nRequestId: %v",
 		resp.ETag, resp.LastModified, uint64(*resp.ContentLength), resp.StorageClass, resp.ContentType, s.getRequestId(req))
-	responseMetadata := resp.Metadata
-	s3Log.Debugf("METADATA:\n")
-	for k, v := range responseMetadata {
-		s3Log.Debugf("-Key:%v and value:%v\n", k, v)
-	}
-	s3Log.Debug("\nBODY:")
-	buf := new(strings.Builder)
-	_, errCopy := io.Copy(buf, resp.Body)
-	if errCopy != nil {
+	responseMetadata, _ := json.Marshal(resp.Metadata)
+	s3Log.Debugf("METADATA:\n%v", string(responseMetadata))
+
+	// for k, v := range responseMetadata {
+	// 	s3Log.Debugf("-Key:%v and value:%v\n", k, v)
+	// }
+	// s3Log.Debug("\nBODY:")
+	// buf := new(strings.Builder) // this causes it to hang
+	// _, errCopy := io.Copy(buf, resp.Body)
+	// if errCopy != nil {
+	// 	log.Fatal(err)
+	// }
+	// s3Log.Debug(buf.String()) // but in the body I do see the contents of the file and thats it
+	// "s3.DEBUG small file 1kb" for test.txt in test share
+
+	bytes, err := io.ReadAll(resp.Body)
+	if err != nil {
 		log.Fatal(err)
 	}
-	s3Log.Debug(buf.String())
+	s3Log.Debug("Printing:")
+	s3Log.Debug(string(bytes))
 
 	return &GetBlobOutput{
 		HeadBlobOutput: HeadBlobOutput{
