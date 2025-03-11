@@ -15,6 +15,8 @@
 package internal
 
 import (
+	"io"
+
 	. "github.com/StatCan/goofys/api/common"
 
 	"fmt"
@@ -801,9 +803,21 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 	// need to replicate this object not using the sdk
 	s3Log.Debugf("\nJose: DEBUG THE GETBLOB OUTPUT DATA STRUCTURE")
 	s3Log.Debugf("Etag: %v. LastModified: %v. Size: %v. StorageClass: %v. ContentType %v."+
-		"\nMetadata: %v \nBody: %v\nRequestId: %v",
-		resp.ETag, resp.LastModified, resp.ContentLength, resp.StorageClass, resp.ContentType, resp.Metadata, resp.Body,
-		s.getRequestId(req))
+		"\nRequestId: %v",
+		resp.ETag, resp.LastModified, uint64(*resp.ContentLength), resp.StorageClass, resp.ContentType, s.getRequestId(req))
+	responseMetadata := resp.Metadata
+	s3Log.Debugf("METADATA:\n")
+	for k, v := range responseMetadata {
+		s3Log.Debugf("-Key:%v and value:%v\n", k, v)
+	}
+	s3Log.Debug("\nBODY:")
+	buf := new(strings.Builder)
+	_, errCopy := io.Copy(buf, resp.Body)
+	if errCopy != nil {
+		log.Fatal(err)
+	}
+	s3Log.Debug(buf.String())
+
 	return &GetBlobOutput{
 		HeadBlobOutput: HeadBlobOutput{
 			BlobItemOutput: BlobItemOutput{
@@ -811,13 +825,15 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 				ETag:         resp.ETag,
 				LastModified: resp.LastModified,
 				Size:         uint64(*resp.ContentLength),
-				StorageClass: resp.StorageClass, // this is seemingly empty
+				StorageClass: resp.StorageClass, // in testing doesnt exist / is nil (should be a header)
 			},
 			ContentType: resp.ContentType,
 			Metadata:    metadataToLower(resp.Metadata),
 		},
-		Body:      resp.Body,
-		RequestId: s.getRequestId(req),
+		Body:      resp.Body,           // gives me &{0x4c25a0 0xc00012b240 0x68d300}
+		RequestId: s.getRequestId(req), // this just looks like; 1577957049:
+		// does not have that extra "x-amz-id-2" since i guess it does not exist
+		// given that it works just fine we can keep it at whatever it actually gives
 	}, nil
 }
 
