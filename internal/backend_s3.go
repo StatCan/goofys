@@ -764,9 +764,10 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 	encodedKey := encodeKey(param.Key)
 	get := s3.GetObjectInput{
 		Bucket: &s.bucket,
-		Key:    &param.Key,
-		//Key: encodedKey,
+		//Key:    &param.Key,
+		Key: encodedKey,
 	}
+	// modify the getObjectInput?
 
 	if s.config.SseC != "" {
 		get.SSECustomerAlgorithm = PString("AES256")
@@ -786,18 +787,18 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 	// TODO handle IfMatch
 
 	req, resp := s.GetObjectRequest(&get)
+	// before we send the request we modify req.HttpRequest
 	err := req.Send()
-	s3Log.Debugf("MATHIS TEST jose getblob before error: req %v, resp %v", req, resp)
+
 	if err != nil {
 		return nil, mapAwsError(err)
 	}
-	s3Log.Debugf("MATHIS TEST jose getblob: req %v, resp %v", req, resp)
+	//s3Log.Debugf("MATHIS TEST jose getblob: req %v, resp %v", req, resp)
 
 	return &GetBlobOutput{
 		HeadBlobOutput: HeadBlobOutput{
 			BlobItemOutput: BlobItemOutput{
-				Key: encodedKey, // should this be encoded?
-				//Key:          &param.Key,
+				Key:          encodedKey,
 				ETag:         resp.ETag,
 				LastModified: resp.LastModified,
 				Size:         uint64(*resp.ContentLength),
