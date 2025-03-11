@@ -291,6 +291,8 @@ func (s *S3Backend) ListObjectsV2(params *s3.ListObjectsV2Input) (*s3.ListObject
 	if s.aws {
 		req, resp := s.S3.ListObjectsV2Request(params)
 		err := req.Send()
+		s3Log.Debugf("MATHIS TEST list: req body %v, req data %v, req signed %v, req req %v, req params %v, req id %v, req resp %v, resp %v",
+			req.Body, req.Data, req.SignedHeaderVals, req.HTTPRequest, req.Params, req.RequestID, req.HTTPResponse, resp)
 		if err != nil {
 			return nil, "", err
 		}
@@ -311,10 +313,10 @@ func (s *S3Backend) ListObjectsV2(params *s3.ListObjectsV2Input) (*s3.ListObject
 		}
 
 		objs, err := s.S3.ListObjects(&v1)
+		s3Log.Debugf("MATHIS TEST: objs %v, err %v", objs, err)
 		if err != nil {
 			return nil, "", err
 		}
-		s3Log.Debugf("MATHIS TEST: objs %v, err %v", objs, err)
 		count := int64(len(objs.Contents))
 		// theres another one in MATHIS TEST: resp jose
 		v2Objs := s3.ListObjectsV2Output{
@@ -789,7 +791,8 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 	req, resp := s.GetObjectRequest(&get)
 	// before we send the request we modify req.HttpRequest
 	err := req.Send()
-
+	s3Log.Debugf("MATHIS TEST list: req body %v, req data %v, req signed %v, req req %v, req params %v, req id %v, req resp %v, resp %v",
+		req.Body, req.Data, req.SignedHeaderVals, req.HTTPRequest, req.Params, req.RequestID, req.HTTPResponse, resp)
 	if err != nil {
 		return nil, mapAwsError(err)
 	}
