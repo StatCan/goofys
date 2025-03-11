@@ -758,20 +758,27 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 		return nil, mapAwsError(err)
 	}
 
+	// Build the request and ensure we can get the return
+	// ....
+
+	// Modify this return
+	// The following entries are in the response headers: ETag, LastModified, ContentLength(Size)
 	return &GetBlobOutput{
 		HeadBlobOutput: HeadBlobOutput{
 			BlobItemOutput: BlobItemOutput{
-				Key:          &param.Key,
-				ETag:         resp.ETag,
-				LastModified: resp.LastModified,
-				Size:         uint64(*resp.ContentLength),
-				StorageClass: resp.StorageClass,
+				Key:          &param.Key,                  // this is whatever, not sure if should be encoded
+				ETag:         resp.ETag,                   // header
+				LastModified: resp.LastModified,           // header
+				Size:         uint64(*resp.ContentLength), // header
+				StorageClass: resp.StorageClass,           // not in header (at least python)
+				// though it should be in the header as x-amz-storage-class
 			},
-			ContentType: resp.ContentType,
-			Metadata:    metadataToLower(resp.Metadata),
+			ContentType: resp.ContentType,               // in the header
+			Metadata:    metadataToLower(resp.Metadata), // again should be in header
 		},
-		Body:      resp.Body,
-		RequestId: s.getRequestId(req),
+		Body:      resp.Body,           // should just be whatever
+		RequestId: s.getRequestId(req), // this is formed of 2 headers, x-amz-request-id and id2 but thats not returned
+		// at least by default
 	}, nil
 }
 
