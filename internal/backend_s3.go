@@ -15,6 +15,12 @@
 package internal
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
+	"io"
+	"os"
+
 	. "github.com/StatCan/goofys/api/common"
 
 	"fmt"
@@ -729,6 +735,75 @@ func (s *S3Backend) CopyBlob(param *CopyBlobInput) (*CopyBlobOutput, error) {
 	return &CopyBlobOutput{s.getRequestId(req)}, nil
 }
 
+// For the purposes of our test we are only testing GET
+func generateSignature(timeStampISO8601Format string, timestampYMD string, hashedPayload string, host string, filePath string) string {
+	// must create the Canonical Request
+	canonicalRequest := "GET\n"         // HTTP Method
+	canonicalRequest += filePath + "\n" // canoniocalURI depends on the file you are accessing
+	// ^ this filePath / canonicalURI may be where we need to encode.
+	canonicalRequest += "\n"                    // canonicalQueryString, keep empty for now
+	canonicalRequest += "host:" + host + "\n" + // Canonical Headers
+		"range:bytes=0-9\n" + "x-amz-content-sha256:" + hashedPayload + "\n" + // this SHA is that of an empty string
+		"x-amz-date:" + timeStampISO8601Format + "\n\n"
+	// has to be double newline after last header
+	// because theres the newline after each header and then one after the group
+	canonicalRequest += "host;range;x-amz-content-sha256;x-amz-date\n" // signed headers, alphabetically sorted
+	canonicalRequest += hashedPayload
+
+	// create string to Sign
+	stringToSign := "AWS4-HMAC-SHA256" //algorithm
+	stringToSign += "\n" + timeStampISO8601Format
+	stringToSign += "\n" + timestampYMD + "/us-east-1/s3/aws4_request\n"
+	hasher2 := sha256.New()
+	hasher2.Write([]byte(canonicalRequest))
+	stringToSign += hex.EncodeToString(hasher2.Sum(nil)) //canonicalrequest must be hashed and hexed again
+	//Create the signing Key
+	dateKey := getHMAC([]byte("AWS4"+os.Getenv("AWS_SECRET_ACCESS_KEY")), []byte(timestampYMD))
+	dateRegionKey := getHMAC(dateKey, []byte("us-east-1"))
+	dateRegionServiceKey := getHMAC(dateRegionKey, []byte("s3"))
+	signingKey := getHMAC(dateRegionServiceKey, []byte("aws4_request"))
+	// create the signature
+	signature := hex.EncodeToString(getHMAC(signingKey, []byte(stringToSign)))
+
+	s3Log.Debugf("\n\nSignature calculated:\n" + signature + "\n")
+	return signature
+}
+
+func getHMAC(key []byte, data []byte) []byte {
+	hash := hmac.New(sha256.New, key)
+	hash.Write(data)
+	return hash.Sum(nil)
+}
+
+func createRequest(host string, method string, filePath string) *http.Request {
+	//url := "https://fld9.s3.cloud.statcan.ca/1121045215484495542/jose/new,file.txt"
+	//method := "GET"
+
+	// Generate values to be re-used, the date, the hashed payload
+	timeStampISO8601Format := time.Now().Format("20060102T150405Z")
+	timestampYMD := time.Now().Format("20060102")
+	payload := strings.NewReader("<file contents here>") // unsure here lol
+	// Generate hash for payload (in our case currently empty)
+	hasher := sha256.New()
+	hasher.Write([]byte(""))
+	hashedPayload := hex.EncodeToString(hasher.Sum(nil)) // should be e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+
+	// combine host and filepath to get full url string
+	req, err := http.NewRequest(method, host+filePath, payload)
+
+	if err != nil {
+		fmt.Println(err)
+	}
+	signature := generateSignature(timeStampISO8601Format, timestampYMD, hashedPayload, host)
+	req.Header.Add("X-Amz-Content-Sha256", hashedPayload)
+	req.Header.Add("X-Amz-Date", timeStampISO8601Format)
+	req.Header.Add("Authorization", "AWS4-HMAC-SHA256 Credential="+os.Getenv("AWS_ACCESS_KEY_ID")+"/"+timestampYMD+
+		"/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date,Signature="+signature)
+	// Example of what the request header should look like below
+	// AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20130524/us-east-1/s3/aws4_request,SignedHeaders=host;range;x-amz-content-sha256;x-amz-date,Signature=f0e8bdb87c964420e857bd35b5d6ed310bd44f0170aba48dd91039c6036bdb41
+	return req
+}
+
 func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 	get := s3.GetObjectInput{
 		Bucket: &s.bucket,
@@ -759,7 +834,26 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 	}
 
 	// Build the request and ensure we can get the return
-	// ....
+	url := "https://fld9.s3.cloud.statcan.ca"
+	bucketPath := "/1121045215484495542/jose/new,file.txt"
+	request := createRequest(url, "GET", bucketPath)
+	client := &http.Client{} // perhaps this client should be declared earlier and passed in. but put here for testing
+
+	res, err := client.Do(request)
+	if err != nil {
+		fmt.Println(err)
+
+	}
+	etag := res.Header.Get("ETag")
+	lastModified := res.Header.Get("Last-Modified")
+	lastModifiedLayout := "Mon, 02 Jan 2006 15:04:05 GMT"
+	defer res.Body.Close()
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		fmt.Println(err)
+	}
+	fmt.Println(string(body))
 
 	// Modify this return
 	// The following entries are in the response headers: ETag, LastModified, ContentLength(Size)
@@ -767,8 +861,8 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 		HeadBlobOutput: HeadBlobOutput{
 			BlobItemOutput: BlobItemOutput{
 				Key:          &param.Key,                  // this is whatever, not sure if should be encoded
-				ETag:         resp.ETag,                   // header
-				LastModified: resp.LastModified,           // header
+				ETag:         &etag,                       // header
+				LastModified: time.Parse(lastModifiedLayout, &lastModified)         // header
 				Size:         uint64(*resp.ContentLength), // header
 				StorageClass: resp.StorageClass,           // not in header (at least python)
 				// though it should be in the header as x-amz-storage-class
