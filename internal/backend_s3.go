@@ -814,9 +814,11 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 	}
 	// Build the request and ensure we can get the return
 	// k logs -c goofys get-blob-testing-0 -n jose-matsuda1 > logs.txt
-	url := "https://fld9.s3.cloud.statcan.ca"
-	filePath := "/1121045215484495542/jose/new,file.txt"
-	request := createRequest(url, "GET", filePath)
+	host := "fld9.s3.cloud.statcan.ca"                   // no https
+	filePath := "/1121045215484495542/jose/new,file.txt" // must encode this
+	// https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html#create-signature-presign-entire-payload
+	filePath = "/1121045215484495542/jose/new%2Cfile.txt" // hardcode for now
+	request := createRequest(host, "GET", filePath)
 	client := &http.Client{} // perhaps this client should be declared earlier and passed in. but put here for testing
 
 	res, errorz := client.Do(request)
