@@ -737,6 +737,7 @@ func (s *S3Backend) CopyBlob(param *CopyBlobInput) (*CopyBlobOutput, error) {
 
 // For the purposes of our test we are only testing GET right now
 func generateSignature(timeStampISO8601Format string, timestampYMD string, hashedPayload string, host string, filePath string) string {
+	s3Log.Debug("\nGenerating Signature")
 	// must create the Canonical Request
 	canonicalRequest := "GET\n"         // HTTP Method
 	canonicalRequest += filePath + "\n" // canoniocalURI depends on the file you are accessing
@@ -776,6 +777,7 @@ func getHMAC(key []byte, data []byte) []byte {
 }
 
 func createRequest(host string, method string, filePath string) *http.Request {
+	s3Log.Debug("\nInside createRequest")
 	//url := "https://fld9.s3.cloud.statcan.ca/1121045215484495542/jose/new,file.txt"
 	//method := "GET"
 
@@ -835,7 +837,8 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 	s3Log.Debugf("Printing out generated etag:%v and lastModified:%v", etag, lastModified)
 	// end custom
 
-	s3Log.Debugf("Printing GetObjectInput. Bucket is %v. Key is %v", s.bucket, param.Key)
+	s3Log.Debugf("1Printing GetObjectInput. Bucket is %v. Key is %v", s.bucket, param.Key)
+	s3Log.Debugf("The param.key is:%v", &param.Key)
 	if s.config.SseC != "" {
 		get.SSECustomerAlgorithm = PString("AES256")
 		get.SSECustomerKey = &s.config.SseC
