@@ -810,7 +810,32 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 		Bucket: &s.bucket,
 		Key:    &param.Key,
 	}
-	s3Log.Debugf("Printing GetObjectInput. Bucket is %v. Key is %v", &s.bucket, &param.Key)
+	// Build the request and ensure we can get the return
+	// k logs -c goofys get-blob-testing-0 -n jose-matsuda1 > logs.txt
+	url := "https://fld9.s3.cloud.statcan.ca"
+	filePath := "/1121045215484495542/jose/new,file.txt"
+	request := createRequest(url, "GET", filePath)
+	client := &http.Client{} // perhaps this client should be declared earlier and passed in. but put here for testing
+
+	res, errorz := client.Do(request)
+	if errorz != nil {
+		fmt.Println(errorz)
+
+	}
+	etag := res.Header.Get("ETag")
+	lastModified := res.Header.Get("Last-Modified")
+	//lastModifiedLayout := "Mon, 02 Jan 2006 15:04:05 GMT"
+	defer res.Body.Close()
+
+	body, errorz := io.ReadAll(res.Body)
+	if errorz != nil {
+		fmt.Println(errorz)
+	}
+	s3Log.Debug("BODY:" + string(body))
+	s3Log.Debugf("Printing out generated etag:%v and lastModified:%v", etag, lastModified)
+	// end custom
+
+	s3Log.Debugf("Printing GetObjectInput. Bucket is %v. Key is %v", s.bucket, param.Key)
 	if s.config.SseC != "" {
 		get.SSECustomerAlgorithm = PString("AES256")
 		get.SSECustomerKey = &s.config.SseC
@@ -827,35 +852,11 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 		get.Range = &bytes
 	}
 	// TODO handle IfMatch
-
 	req, resp := s.GetObjectRequest(&get)
 	err := req.Send()
 	if err != nil {
 		return nil, mapAwsError(err)
 	}
-
-	// Build the request and ensure we can get the return
-	url := "https://fld9.s3.cloud.statcan.ca"
-	filePath := "/1121045215484495542/jose/new,file.txt"
-	request := createRequest(url, "GET", filePath)
-	client := &http.Client{} // perhaps this client should be declared earlier and passed in. but put here for testing
-
-	res, err := client.Do(request)
-	if err != nil {
-		fmt.Println(err)
-
-	}
-	etag := res.Header.Get("ETag")
-	lastModified := res.Header.Get("Last-Modified")
-	//lastModifiedLayout := "Mon, 02 Jan 2006 15:04:05 GMT"
-	defer res.Body.Close()
-
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		fmt.Println(err)
-	}
-	s3Log.Debug("BODY:" + string(body))
-	s3Log.Debugf("Printing out generated etag:%v and lastModified:%v", etag, lastModified)
 
 	// Modify this return
 	// The following entries are in the response headers: ETag, LastModified, ContentLength(Size)
