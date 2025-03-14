@@ -735,7 +735,7 @@ func (s *S3Backend) CopyBlob(param *CopyBlobInput) (*CopyBlobOutput, error) {
 	return &CopyBlobOutput{s.getRequestId(req)}, nil
 }
 
-// For the purposes of our test we are only testing GET
+// For the purposes of our test we are only testing GET right now
 func generateSignature(timeStampISO8601Format string, timestampYMD string, hashedPayload string, host string, filePath string) string {
 	// must create the Canonical Request
 	canonicalRequest := "GET\n"         // HTTP Method
@@ -794,7 +794,7 @@ func createRequest(host string, method string, filePath string) *http.Request {
 	if err != nil {
 		fmt.Println(err)
 	}
-	signature := generateSignature(timeStampISO8601Format, timestampYMD, hashedPayload, host)
+	signature := generateSignature(timeStampISO8601Format, timestampYMD, hashedPayload, host, filePath)
 	req.Header.Add("X-Amz-Content-Sha256", hashedPayload)
 	req.Header.Add("X-Amz-Date", timeStampISO8601Format)
 	req.Header.Add("Authorization", "AWS4-HMAC-SHA256 Credential="+os.Getenv("AWS_ACCESS_KEY_ID")+"/"+timestampYMD+
@@ -805,11 +805,12 @@ func createRequest(host string, method string, filePath string) *http.Request {
 }
 
 func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
+	s3Log.Debug("INSIDE GETBLOB")
 	get := s3.GetObjectInput{
 		Bucket: &s.bucket,
 		Key:    &param.Key,
 	}
-
+	s3Log.Debugf("Printing GetObjectInput. Bucket is %v. Key is %v", &s.bucket, &param.Key)
 	if s.config.SseC != "" {
 		get.SSECustomerAlgorithm = PString("AES256")
 		get.SSECustomerKey = &s.config.SseC
@@ -835,8 +836,8 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 
 	// Build the request and ensure we can get the return
 	url := "https://fld9.s3.cloud.statcan.ca"
-	bucketPath := "/1121045215484495542/jose/new,file.txt"
-	request := createRequest(url, "GET", bucketPath)
+	filePath := "/1121045215484495542/jose/new,file.txt"
+	request := createRequest(url, "GET", filePath)
 	client := &http.Client{} // perhaps this client should be declared earlier and passed in. but put here for testing
 
 	res, err := client.Do(request)
@@ -846,23 +847,26 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 	}
 	etag := res.Header.Get("ETag")
 	lastModified := res.Header.Get("Last-Modified")
-	lastModifiedLayout := "Mon, 02 Jan 2006 15:04:05 GMT"
+	//lastModifiedLayout := "Mon, 02 Jan 2006 15:04:05 GMT"
 	defer res.Body.Close()
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		fmt.Println(err)
 	}
-	fmt.Println(string(body))
+	s3Log.Debug("BODY:" + string(body))
+	s3Log.Debugf("Printing out generated etag:%v and lastModified:%v", etag, lastModified)
 
 	// Modify this return
 	// The following entries are in the response headers: ETag, LastModified, ContentLength(Size)
 	return &GetBlobOutput{
 		HeadBlobOutput: HeadBlobOutput{
 			BlobItemOutput: BlobItemOutput{
-				Key:          &param.Key,                  // this is whatever, not sure if should be encoded
-				ETag:         &etag,                       // header
-				LastModified: time.Parse(lastModifiedLayout, &lastModified)         // header
+				Key:  &param.Key, // this is whatever, not sure if should be encoded
+				ETag: resp.ETag,
+				//ETag:         &etag,                       // header
+				LastModified: resp.LastModified,
+				//LastModified: time.Parse(lastModifiedLayout, &lastModified)         // header
 				Size:         uint64(*resp.ContentLength), // header
 				StorageClass: resp.StorageClass,           // not in header (at least python)
 				// though it should be in the header as x-amz-storage-class
