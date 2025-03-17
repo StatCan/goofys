@@ -742,15 +742,15 @@ func generateSignature(timeStampISO8601Format string, timestampYMD string, hashe
 	canonicalRequest := "GET\n"         // HTTP Method
 	canonicalRequest += filePath + "\n" // canoniocalURI depends on the file you are accessing
 	// ^ this filePath / canonicalURI may be where we need to encode.
-	canonicalRequest += "\n"                    // canonicalQueryString, keep empty for now
+	canonicalRequest += "\n"                    // canonicalQueryString, no "?" so just a \n
 	canonicalRequest += "host:" + host + "\n" + // Canonical Headers
-		"range:bytes=0-9\n" + "x-amz-content-sha256:" + hashedPayload + "\n" + // this SHA is that of an empty string
+		"x-amz-content-sha256:" + hashedPayload + "\n" + // this SHA is that of an empty string
 		"x-amz-date:" + timeStampISO8601Format + "\n\n"
 	// has to be double newline after last header
 	// because theres the newline after each header and then one after the group
-	canonicalRequest += "host;range;x-amz-content-sha256;x-amz-date\n" // signed headers, alphabetically sorted
+	canonicalRequest += "host;x-amz-content-sha256;x-amz-date\n" // signed headers, alphabetically sorted
 	canonicalRequest += hashedPayload
-
+	s3Log.Debug("Canonical Request:" + canonicalRequest)
 	// create string to Sign
 	stringToSign := "AWS4-HMAC-SHA256" //algorithm
 	stringToSign += "\n" + timeStampISO8601Format
@@ -758,6 +758,7 @@ func generateSignature(timeStampISO8601Format string, timestampYMD string, hashe
 	hasher2 := sha256.New()
 	hasher2.Write([]byte(canonicalRequest))
 	stringToSign += hex.EncodeToString(hasher2.Sum(nil)) //canonicalrequest must be hashed and hexed again
+	s3Log.Debug("StringToSign:" + stringToSign)
 	//Create the signing Key
 	dateKey := getHMAC([]byte("AWS4"+os.Getenv("AWS_SECRET_ACCESS_KEY")), []byte(timestampYMD))
 	dateRegionKey := getHMAC(dateKey, []byte("us-east-1"))
@@ -805,7 +806,7 @@ func createRequest(host string, method string, filePath string) *http.Request {
 	// Example of what the request header should look like below
 	// AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20130524/us-east-1/s3/aws4_request,SignedHeaders=host;range;x-amz-content-sha256;x-amz-date,Signature=f0e8bdb87c964420e857bd35b5d6ed310bd44f0170aba48dd91039c6036bdb41
 	s3Log.Debug("MANUAL Authorization header: AWS4-HMAC-SHA256 Credential=" + os.Getenv("AWS_ACCESS_KEY_ID") + "/" + timestampYMD +
-		"/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date,Signature=" + signature)
+		"/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=" + signature)
 	return req
 }
 
