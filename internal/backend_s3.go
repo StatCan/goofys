@@ -822,14 +822,9 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 	filePath := "/1121045215484495542/jose/new,file.txt" // must encode this
 
 	// https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html#create-signature-presign-entire-payload
-	filePath = "/1121045215484495542/jose/new%2Cfile.txt" // hardcode for now
-	filePath = "/1121045215484495542/test.txt"
-	// should have contents `small file 1kb` // this fails
-	//filePath = "/1121045215484495542%2Ftest.txt"          // this fails
-	//filePath = "test.txt"                                 // need to put the bucket name into the host somehow
-	filePath = "/1121045215484495542%2Fregular" // failed
-	filePath = "/1121045215484495542/regular"
-	//parse "https://fld9.s3.cloud.statcan.ca%2F1121045215484495542%2Fregular": invalid URL escape "%2F"
+	filePath = "/1121045215484495542/jose/new,file.txt" // hardcode for now
+	//filePath = "/1121045215484495542/test.txt"
+	//filePath = "/1121045215484495542/regular"   // this works
 
 	request := createRequest(host, "GET", filePath)
 	client := &http.Client{} // perhaps this client should be declared earlier and passed in. but put here for testing
