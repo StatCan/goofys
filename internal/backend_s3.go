@@ -890,6 +890,11 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 	req.HTTPRequest.Header.Set("Authorization", request.Header.Get("Authorization"))
 	s3Log.Debugf("HEADER 1:" + request.Header.Get("Authorization"))
 	s3Log.Debug("HEADER 2:" + req.HTTPRequest.Header.Get("Authorization"))
+
+	// Other headers
+	s3Log.Debug("HEADER SIGNED b4 change:" + req.SignedHeaderVals.Get("Authorization"))
+	req.SignedHeaderVals.Set("Authorization", request.Header.Get("Authorization"))
+
 	err := req.Send()
 	if err != nil {
 		return nil, mapAwsError(err)
