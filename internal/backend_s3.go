@@ -827,6 +827,7 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 	//filePath = "/1121045215484495542/regular"   // this works
 	//filePath = "/1121045215484495542/jose/test-file.txt" // this works
 	filePath = "/1121045215484495542/jose/new,file.txt"
+	filePath = "/1121045215484495542/dollar%24sign.txt" //%24
 	request := createRequest(host, "GET", filePath)
 	client := &http.Client{} // perhaps this client should be declared earlier and passed in. but put here for testing
 	res, errorz := client.Do(request)
