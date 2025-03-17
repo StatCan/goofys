@@ -886,6 +886,7 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 	}
 	// TODO handle IfMatch
 	req, resp := s.GetObjectRequest(&get)
+	s3Log.Debug("HEADER BEFORE CHANGE:" + req.HTTPRequest.Header.Get("Authorization"))
 	req.HTTPRequest.Header.Set("Authorization", request.Header.Get("Authorization"))
 	s3Log.Debugf("HEADER 1:" + request.Header.Get("Authorization"))
 	s3Log.Debug("HEADER 2:" + req.HTTPRequest.Header.Get("Authorization"))
