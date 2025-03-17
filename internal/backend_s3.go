@@ -822,9 +822,10 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 	filePath := "/1121045215484495542/jose/new,file.txt" // must encode this
 
 	// https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html#create-signature-presign-entire-payload
-	filePath = "/1121045215484495542/jose/new,file.txt" // hardcode for now
-	//filePath = "/1121045215484495542/test.txt"
+	// March 17 update
+	//filePath = "/1121045215484495542/jose/new%2Cfile.txt" // hardcode for now // this still fails
 	//filePath = "/1121045215484495542/regular"   // this works
+	filePath = "/1121045215484495542/jose/test-file.txt"
 
 	request := createRequest(host, "GET", filePath)
 	client := &http.Client{} // perhaps this client should be declared earlier and passed in. but put here for testing
