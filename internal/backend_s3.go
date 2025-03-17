@@ -892,7 +892,7 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 	s3Log.Debug("HEADER 2:" + req.HTTPRequest.Header.Get("Authorization"))
 
 	// Other headers
-	s3Log.Debug("HEADER SIGNED b4 change:" + req.SignedHeaderVals.Get("Authorization"))
+	//s3Log.Debug("HEADER SIGNED b4 change:" + req.SignedHeaderVals.Get("Authorization")) // invalid / null
 	req.SignedHeaderVals.Set("Authorization", request.Header.Get("Authorization"))
 
 	err := req.Send()
