@@ -427,7 +427,7 @@ func (b *S3ReadBuffer) initBuffer(fh *FileHandle, offset uint64, size uint32) {
 		if err != nil {
 			return nil, err
 		}
-
+		s3Log.Debug("JDebug: nitbuffer outside of getblobinput")
 		return resp.Body, nil
 	}
 
@@ -722,7 +722,7 @@ func (fh *FileHandle) readFromStream(offset int64, buf []byte) (bytesRead int, e
 		if err != nil {
 			return bytesRead, err
 		}
-
+		s3Log.Debug("JDebug: outside readFromStream") // dies here, "read on closed response bodys"
 		fh.reader = resp.Body
 	}
 

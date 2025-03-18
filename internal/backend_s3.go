@@ -18,7 +18,6 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
-	"io"
 	"os"
 
 	. "github.com/StatCan/goofys/api/common"
@@ -51,7 +50,7 @@ type S3Backend struct {
 	flags     *FlagStorage
 	config    *S3Config
 	sseType   string
-
+	// httpClient      http.Client // do this so we can pass around? init below in NewS3
 	aws      bool
 	gcs      bool
 	v2Signer bool
@@ -816,6 +815,7 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 		Bucket: &s.bucket,
 		Key:    &param.Key,
 	}
+	//s.bucket and param.key to build the filepath
 	// Build the request and ensure we can get the return
 	// k logs -c goofys get-blob-testing-0 -n jose-matsuda1 > logs.txt
 	host := "fld9.s3.cloud.statcan.ca"
@@ -827,6 +827,8 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 	// filePath += url.QueryEscape("bad,file.txt")
 	filePath := "/1121045215484495542/jose/"
 	filePath += url.QueryEscape("new,file.txt")
+
+	//filePath = "/1121045215484495542/jose/new,file.txt"
 	//filePath := "/1121045215484495542/regular"
 
 	request := createRequest(host, "GET", filePath)
@@ -838,35 +840,47 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 	}
 	etag := res.Header.Get("ETag")
 	lastModified, _ := time.Parse("Mon, 02 Jan 2006 15:04:05 GMT", res.Header.Get("Last-Modified"))
-	//lastModifiedLayout := "Mon, 02 Jan 2006 15:04:05 GMT"
-	//lastMod := time.Parse(lastModifiedLayout, lastModified)
+	size1, _ := strconv.ParseUint(res.Header.Get("ContentLength"), 10, 64)
+	storageClass1 := res.Header.Get("x-amz-storage-class")
+	contentType1 := res.Header.Get("Content-Type")
+	amzRequest := res.Header.Get("x-amz-request-id") + ": " + res.Header.Get("x-amz-id-2")
+	responseBody := res.Body
+	// Build the x-amz-meta headers
+	amzMeta1 := make(map[string]*string)
+	for key, val := range res.Header {
+		if strings.HasPrefix("x-amz-meta-", key) {
+			for _, value := range val {
+				amzMeta1[key] = &value
+			}
+		}
+	}
 	defer res.Body.Close()
 
-	body, errorz := io.ReadAll(res.Body)
+	//body, errorz := io.ReadAll(res.Body)
 	if errorz != nil {
 		fmt.Println(errorz)
 	}
-	s3Log.Debug("Generated body:" + string(body))
-	s3Log.Debugf("Printing out generated etag:%v and lastModified:%v", etag, lastModified)
+	//s3Log.Debug("Generated body:" + string(body)) // comment out if this is closing the body?
+	//s3Log.Debugf("Printing out generated etag:%v and lastModified:%v", etag, lastModified)
 	// Modify this return
 	// The following entries are in the response headers: ETag, LastModified, ContentLength(Size)
-	// return &GetBlobOutput{
-	// 	HeadBlobOutput: HeadBlobOutput{
-	// 		BlobItemOutput: BlobItemOutput{
-	// 			Key:          &param.Key, // this is whatever, not sure if should be encoded
-	// 			ETag:         &etag,
-	// 			LastModified: &lastModified,
-	// 			Size:         uint64(*&res.ContentLength),           // header
-	// 			StorageClass: res.Header.Get("x-amz-storage-class"), // not in header (at least python)
-	// 			// though it should be in the header as x-amz-storage-class
-	// 		},
-	// 		ContentType: res.ContentType,                // in the header
-	// 		Metadata:    metadataToLower(resp.Metadata), // again should be in header
-	// 	},
-	// 	Body:      resp.Body,           // should just be whatever
-	// 	RequestId: s.getRequestId(req), // this is formed of 2 headers, x-amz-request-id and id2 but thats not returned
-	// 	// at least by default
-	// }, nil
+	// returning at this point has it looping infinitely
+	return &GetBlobOutput{
+		HeadBlobOutput: HeadBlobOutput{
+			BlobItemOutput: BlobItemOutput{
+				Key:          &param.Key, // this is whatever, not sure if should be encoded
+				ETag:         &etag,
+				LastModified: &lastModified,
+				Size:         size1,          // header
+				StorageClass: &storageClass1, // not in header (at least python)
+				// though it should be in the header as x-amz-storage-class
+			},
+			ContentType: &contentType1,             // in the header
+			Metadata:    metadataToLower(amzMeta1), // again should be in header
+		},
+		Body:      responseBody, // should just be whatever // this is read on closed response body
+		RequestId: amzRequest,
+	}, nil
 	// end custom
 
 	if s.config.SseC != "" {
@@ -885,11 +899,49 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 		get.Range = &bytes
 	}
 	// TODO handle IfMatch
-	req, resp := s.GetObjectRequest(&get)
-	s3Log.Debug("HEADER BEFORE CHANGE:" + req.HTTPRequest.Header.Get("Authorization"))
-	req.HTTPRequest.Header.Set("Authorization", request.Header.Get("Authorization"))
-	s3Log.Debugf("HEADER 1:" + request.Header.Get("Authorization"))
-	s3Log.Debug("HEADER 2:" + req.HTTPRequest.Header.Get("Authorization"))
+	req, resp := s.GetObjectRequest(&get) // Goofys
+
+	// test using just use SDK request
+	request3 := req.HTTPRequest
+	request3.Header.Set("Authorization", request.Header.Get("Authorization"))
+	response3, errorzz := client.Do(request3)
+	if errorzz != nil {
+		fmt.Println(errorzz)
+	}
+
+	etag2 := response3.Header.Get("ETag")
+	lastModified2, _ := time.Parse("Mon, 02 Jan 2006 15:04:05 GMT", response3.Header.Get("Last-Modified"))
+	size, _ := strconv.ParseUint(response3.Header.Get("ContentLength"), 10, 64)
+	storageClass := response3.Header.Get("x-amz-storage-class")
+	contentType := response3.Header.Get("Content-Type")
+	// Build the x-amz-meta headers
+	amzMeta := make(map[string]*string)
+	for key, val := range response3.Header {
+		if strings.HasPrefix("x-amz-meta-", key) {
+			for _, value := range val {
+				amzMeta[key] = &value
+			}
+		}
+	}
+	// response3.Header.Get("x-amz-meta-")
+	// try using the http req from the sdk object
+	return &GetBlobOutput{
+		HeadBlobOutput: HeadBlobOutput{
+			BlobItemOutput: BlobItemOutput{
+				Key:          &param.Key, // this is whatever, not sure if should be encoded
+				ETag:         &etag2,
+				LastModified: &lastModified2,
+				Size:         size,
+				StorageClass: &storageClass,
+			},
+			ContentType: &contentType,             // in the header
+			Metadata:    metadataToLower(amzMeta), // again should be in header // "x-amz-meta-
+		},
+		Body: response3.Body, // should just be whatever
+		RequestId: response3.Header.Get("x-amz-request-id") + ": " +
+			response3.Header.Get("x-amz-id-2"), // this is formed of 2 headers, x-amz-request-id and id2 but thats not returned
+		// at least by default
+	}, nil
 
 	// Other headers
 	//s3Log.Debug("HEADER SIGNED b4 change:" + req.SignedHeaderVals.Get("Authorization")) // invalid / null
