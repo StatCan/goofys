@@ -18,6 +18,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"io"
 	"os"
 
 	. "github.com/StatCan/goofys/api/common"
@@ -845,6 +846,7 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 	contentType1 := res.Header.Get("Content-Type")
 	amzRequest := res.Header.Get("x-amz-request-id") + ": " + res.Header.Get("x-amz-id-2")
 	responseBody := res.Body
+	blah := io.Copy(res.Body)
 	// Build the x-amz-meta headers
 	amzMeta1 := make(map[string]*string)
 	for key, val := range res.Header {
@@ -864,7 +866,7 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 	//s3Log.Debugf("Printing out generated etag:%v and lastModified:%v", etag, lastModified)
 	// Modify this return
 	// The following entries are in the response headers: ETag, LastModified, ContentLength(Size)
-	// returning at this point has it looping infinitely
+	// returning at this point has it looping infinitely, because at the return the responseBody just gets closed
 	return &GetBlobOutput{
 		HeadBlobOutput: HeadBlobOutput{
 			BlobItemOutput: BlobItemOutput{

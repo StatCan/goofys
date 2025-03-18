@@ -725,7 +725,7 @@ func (fh *FileHandle) readFromStream(offset int64, buf []byte) (bytesRead int, e
 		s3Log.Debug("JDebug: outside readFromStream") // dies here, "read on closed response bodys"
 		fh.reader = resp.Body
 	}
-
+	defer fh.reader.Close()
 	bytesRead, err = fh.reader.Read(buf)
 	if err != nil {
 		if err != io.EOF {
