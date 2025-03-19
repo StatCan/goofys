@@ -813,19 +813,16 @@ func createRequest(host string, method string, filePath string) *http.Request {
 
 func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 	s3Log.Debug("INSIDE GETBLOB, param.Key:" + param.Key)
-	// Assumes param.Key looks like /bucket/path/path2/.../end
-	pathToClean := strings.Split(param.Key, `/`)
+	// s.bucket and param.Key combine nicely with good slash management. The final path we want looks something like;
+	// /bucket/path/path2/.../file.txt
+	// Example -> s.bucket: 1121045215484495542 and param.Key: jose/new,file.txt
+	pathToClean := strings.Split(s.bucket+param.Key, `/`)
 	cleanedPath := ""
-	// https://goplay.tools/snippet/mEp_wVTWbAt
-	// This is to avoid cleanedPath looking like //bucket/path/path2 where it has a double slash at the start.
-	for i := range pathToClean[1:] {
-		cleanedPath += "/" + url.QueryEscape(pathToClean[i+1])
+	for i := range pathToClean {
+		cleanedPath += "/" + url.QueryEscape(pathToClean[i])
 	}
 
-	filePath := "/1121045215484495542/jose/"
-	filePath += url.QueryEscape("new,file.txt")
-
-	request := createRequest(os.Getenv("BUCKET_HOST"), "GET", filePath)
+	request := createRequest(os.Getenv("BUCKET_HOST"), "GET", cleanedPath)
 	res, errorz := s.httpClient.Do(request)
 	if errorz != nil {
 		fmt.Println(errorz)
