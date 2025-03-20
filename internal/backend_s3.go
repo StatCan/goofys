@@ -294,7 +294,7 @@ func (s *S3Backend) Init(key string) error {
 }
 
 func (s *S3Backend) ListObjectsV2(params *s3.ListObjectsV2Input) (*s3.ListObjectsV2Output, string, error) {
-	s3Log.Debugf("MATHIS TEST: params %v, backend %v", params, s)
+	s3Log.Debugf("ListObjectsV2: params %v, backend %v", params, s)
 	if s.aws {
 		req, resp := s.S3.ListObjectsV2Request(params)
 		err := req.Send()
@@ -321,7 +321,7 @@ func (s *S3Backend) ListObjectsV2(params *s3.ListObjectsV2Input) (*s3.ListObject
 		if err != nil {
 			return nil, "", err
 		}
-		s3Log.Debugf("MATHIS TEST: objs %v, err %v", objs, err)
+		s3Log.Debugf("ListObjectsV2: objs %v, err %v", objs, err)
 		count := int64(len(objs.Contents))
 		v2Objs := s3.ListObjectsV2Output{
 			CommonPrefixes:        objs.CommonPrefixes,
@@ -396,7 +396,7 @@ func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 
 func (s *S3Backend) ListBlobs(param *ListBlobsInput) (*ListBlobsOutput, error) {
 	var maxKeys *int64
-	s3Log.Debugf("MATHIS TEST")
+	s3Log.Debugf("ListBlobs")
 	if param.MaxKeys != nil {
 		maxKeys = aws.Int64(int64(*param.MaxKeys))
 	}
@@ -409,7 +409,7 @@ func (s *S3Backend) ListBlobs(param *ListBlobsInput) (*ListBlobsOutput, error) {
 		StartAfter:        param.StartAfter,
 		ContinuationToken: param.ContinuationToken,
 	})
-	s3Log.Debugf("MATHIS TEST: resp %v, reqid %v, err %v", resp, reqId, err)
+	s3Log.Debugf("ListBlobs: resp %v, reqid %v, err %v", resp, reqId, err)
 	if err != nil {
 		return nil, mapAwsError(err)
 	}
@@ -429,12 +429,12 @@ func (s *S3Backend) ListBlobs(param *ListBlobsInput) (*ListBlobsOutput, error) {
 			StorageClass: i.StorageClass,
 		})
 	}
-	s3Log.Debugf("MATHIS TEST: prefixes %v, items %v", prefixes, items)
+	s3Log.Debugf("ListBlobs: prefixes %v, items %v", prefixes, items)
 	isTruncatedFlag := false
 	if resp.IsTruncated != nil {
 		isTruncatedFlag = *resp.IsTruncated
 	} else {
-		s3Log.Debugf("MATHIS TEST: nil pointer catch")
+		s3Log.Debugf("ListBlobs: nil pointer catch")
 	}
 	return &ListBlobsOutput{
 		Prefixes:              prefixes,
@@ -739,11 +739,11 @@ func (s *S3Backend) CopyBlob(param *CopyBlobInput) (*CopyBlobOutput, error) {
 // For the purposes of our test we are only testing GET right now
 func generateSignature(timeStampISO8601Format string, timestampYMD string, hashedPayload string, host string, filePath string, method string) string {
 	s3Log.Debug("Generating Signature")
+	// https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html
 	// must create the Canonical Request
-	canonicalRequest := method + "\n"   // HTTP Method
-	canonicalRequest += filePath + "\n" // canoniocalURI depends on the file you are accessing
-	// ^ this filePath / canonicalURI may be where we need to encode.
-	canonicalRequest += "\n"                    // canonicalQueryString, no "?" so just a \n
+	canonicalRequest := method + "\n"           // HTTP Method
+	canonicalRequest += filePath + "\n"         // canoniocalURI depends on the file you are accessing
+	canonicalRequest += "\n"                    // canonicalQueryString: what comes after the "?" if none then just \n
 	canonicalRequest += "host:" + host + "\n" + // Canonical Headers
 		"x-amz-content-sha256:" + hashedPayload + "\n" + // this SHA is that of an empty string, at least for GET
 		"x-amz-date:" + timeStampISO8601Format + "\n\n"
@@ -751,7 +751,6 @@ func generateSignature(timeStampISO8601Format string, timestampYMD string, hashe
 	// because theres the newline after each header and then one after the group
 	canonicalRequest += "host;x-amz-content-sha256;x-amz-date\n" // signed headers, alphabetically sorted
 	canonicalRequest += hashedPayload
-	//s3Log.Debug("Canonical Request:" + canonicalRequest)
 	// create string to Sign
 	stringToSign := "AWS4-HMAC-SHA256" //algorithm
 	stringToSign += "\n" + timeStampISO8601Format
@@ -759,7 +758,6 @@ func generateSignature(timeStampISO8601Format string, timestampYMD string, hashe
 	hasher2 := sha256.New()
 	hasher2.Write([]byte(canonicalRequest))
 	stringToSign += hex.EncodeToString(hasher2.Sum(nil)) //canonicalrequest must be hashed and hexed again
-	//s3Log.Debug("StringToSign:" + stringToSign)
 	//Create the signing Key
 	dateKey := getHMAC([]byte("AWS4"+os.Getenv("AWS_SECRET_ACCESS_KEY")), []byte(timestampYMD))
 	dateRegionKey := getHMAC(dateKey, []byte("us-east-1"))
@@ -767,8 +765,6 @@ func generateSignature(timeStampISO8601Format string, timestampYMD string, hashe
 	signingKey := getHMAC(dateRegionServiceKey, []byte("aws4_request"))
 	// create the signature
 	signature := hex.EncodeToString(getHMAC(signingKey, []byte(stringToSign)))
-
-	s3Log.Debugf("\n\nSignature calculated:\n" + signature + "\n")
 	return signature
 }
 
@@ -778,11 +774,8 @@ func getHMAC(key []byte, data []byte) []byte {
 	return hash.Sum(nil)
 }
 
+// May need to modify once we get to `PUT`
 func createRequest(host string, method string, filePath string) *http.Request {
-	s3Log.Debug("Inside createRequest")
-	//url := "https://fld9.s3.cloud.statcan.ca/1121045215484495542/jose/new,file.txt"
-	//method := "GET"
-
 	// Generate values to be re-used, the date, the hashed payload
 	timeStampISO8601Format := time.Now().Format("20060102T150405Z")
 	timestampYMD := time.Now().Format("20060102")
@@ -806,8 +799,6 @@ func createRequest(host string, method string, filePath string) *http.Request {
 		"/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date,Signature="+signature)
 	// Example of what the request header should look like below
 	// AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20130524/us-east-1/s3/aws4_request,SignedHeaders=host;range;x-amz-content-sha256;x-amz-date,Signature=f0e8bdb87c964420e857bd35b5d6ed310bd44f0170aba48dd91039c6036bdb41
-	s3Log.Debug("MANUAL Authorization header: AWS4-HMAC-SHA256 Credential=" + os.Getenv("AWS_ACCESS_KEY_ID") + "/" + timestampYMD +
-		"/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=" + signature)
 	return req
 }
 
@@ -846,7 +837,7 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 	return &GetBlobOutput{
 		HeadBlobOutput: HeadBlobOutput{
 			BlobItemOutput: BlobItemOutput{
-				Key:          &param.Key, // unsure if should be encoded
+				Key:          &param.Key, // Does not need to be encoded
 				ETag:         &etag,
 				LastModified: &lastModified,
 				Size:         size1,
@@ -855,7 +846,7 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 			ContentType: &contentType1,
 			Metadata:    metadataToLower(amzMeta1),
 		},
-		Body:      io.NopCloser(res.Body), // this is read on closed response body
+		Body:      io.NopCloser(res.Body), // Without the NopCloser the calling function will not be able to use this
 		RequestId: amzRequest,
 	}, nil
 }
@@ -945,7 +936,7 @@ func (s *S3Backend) MultipartBlobBegin(param *MultipartBlobBeginInput) (*Multipa
 	// again reference API
 	resp, err := s.CreateMultipartUpload(&mpu)
 	if err != nil {
-		s3Log.Errorf("Jose: CreateMultipartUpload %v = %v", param.Key, err) // this is the err i get?
+		s3Log.Errorf("CreateMultipartUpload %v = %v", param.Key, err) // this is the err i get?
 		return nil, mapAwsError(err)
 	}
 
