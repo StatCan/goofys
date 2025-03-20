@@ -427,6 +427,7 @@ func (b *S3ReadBuffer) initBuffer(fh *FileHandle, offset uint64, size uint32) {
 		if err != nil {
 			return nil, err
 		}
+
 		return resp.Body, nil
 	}
 
@@ -721,8 +722,10 @@ func (fh *FileHandle) readFromStream(offset int64, buf []byte) (bytesRead int, e
 		if err != nil {
 			return bytesRead, err
 		}
+
 		fh.reader = resp.Body
 	}
+
 	bytesRead, err = fh.reader.Read(buf)
 	if err != nil {
 		if err != io.EOF {
