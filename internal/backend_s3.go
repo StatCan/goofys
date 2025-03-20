@@ -736,28 +736,27 @@ func (s *S3Backend) CopyBlob(param *CopyBlobInput) (*CopyBlobOutput, error) {
 	return &CopyBlobOutput{s.getRequestId(req)}, nil
 }
 
-// For the purposes of our test we are only testing GET right now
 func generateSignature(timeStampISO8601Format string, timestampYMD string, hashedPayload string, host string, filePath string, method string) string {
 	s3Log.Debug("Generating Signature")
 	// https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html
 	// must create the Canonical Request
-	canonicalRequest := method + "\n"           // HTTP Method
-	canonicalRequest += filePath + "\n"         // canoniocalURI depends on the file you are accessing
-	canonicalRequest += "\n"                    // canonicalQueryString: what comes after the "?" if none then just \n
+	canonicalRequest := method + "\n"   // HTTP Method
+	canonicalRequest += filePath + "\n" // canoniocalURI
+	canonicalRequest += "\n"            // canonicalQueryString: what comes after the "?" if none then just \n, if for other functions they need more
+	// we will edit it then, but for just get it is empty
 	canonicalRequest += "host:" + host + "\n" + // Canonical Headers
 		"x-amz-content-sha256:" + hashedPayload + "\n" + // this SHA is that of an empty string, at least for GET
 		"x-amz-date:" + timeStampISO8601Format + "\n\n"
-	// has to be double newline after last header
-	// because theres the newline after each header and then one after the group
+	// has to be double newline after last header because theres the newline after each header and then one after the group
 	canonicalRequest += "host;x-amz-content-sha256;x-amz-date\n" // signed headers, alphabetically sorted
 	canonicalRequest += hashedPayload
 	// create string to Sign
 	stringToSign := "AWS4-HMAC-SHA256" //algorithm
 	stringToSign += "\n" + timeStampISO8601Format
 	stringToSign += "\n" + timestampYMD + "/us-east-1/s3/aws4_request\n"
-	hasher2 := sha256.New()
-	hasher2.Write([]byte(canonicalRequest))
-	stringToSign += hex.EncodeToString(hasher2.Sum(nil)) //canonicalrequest must be hashed and hexed again
+	hash256 := sha256.New()
+	hash256.Write([]byte(canonicalRequest))
+	stringToSign += hex.EncodeToString(hash256.Sum(nil))
 	//Create the signing Key
 	dateKey := getHMAC([]byte("AWS4"+os.Getenv("AWS_SECRET_ACCESS_KEY")), []byte(timestampYMD))
 	dateRegionKey := getHMAC(dateKey, []byte("us-east-1"))
@@ -803,7 +802,6 @@ func createRequest(host string, method string, filePath string) *http.Request {
 }
 
 func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
-	s3Log.Debug("INSIDE GETBLOB, param.Key:" + param.Key)
 	// s.bucket and param.Key combine nicely with good slash management. The final path we want looks something like;
 	// /bucket/path/path2/.../file.txt
 	// Example -> s.bucket: 1121045215484495542 and param.Key: jose/new,file.txt
