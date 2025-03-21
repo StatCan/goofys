@@ -365,6 +365,7 @@ func (s *S3Backend) getRequestId(r *request.Request) string {
 }
 
 func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
+	s3Log.Debugf("Entering HeadBlob")
 	head := s3.HeadObjectInput{Bucket: &s.bucket,
 		Key: &param.Key,
 	}
@@ -379,6 +380,7 @@ func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 	if err != nil {
 		return nil, mapAwsError(err)
 	}
+	s3Log.Debugf("Exiting Headblob")
 	return &HeadBlobOutput{
 		BlobItemOutput: BlobItemOutput{
 			Key:          &param.Key,
@@ -647,6 +649,7 @@ func (s *S3Backend) copyObjectMultipart(size int64, from string, to string, mpuI
 
 func (s *S3Backend) CopyBlob(param *CopyBlobInput) (*CopyBlobOutput, error) {
 	metadataDirective := s3.MetadataDirectiveCopy
+	s3Log.Debugf("Entering CopyBlob")
 	if param.Metadata != nil {
 		metadataDirective = s3.MetadataDirectiveReplace
 	}
@@ -700,6 +703,7 @@ func (s *S3Backend) CopyBlob(param *CopyBlobInput) (*CopyBlobOutput, error) {
 		MetadataDirective: &metadataDirective,
 	}
 
+	s3Log.Debug("CopyBlob params")
 	s3Log.Debug(params)
 
 	if s.config.UseSSE {
@@ -732,7 +736,7 @@ func (s *S3Backend) CopyBlob(param *CopyBlobInput) (*CopyBlobOutput, error) {
 		s3Log.Errorf("CopyObject %v = %v", params, err)
 		return nil, mapAwsError(err)
 	}
-
+	s3Log.Debug("Exiting copyblob")
 	return &CopyBlobOutput{s.getRequestId(req)}, nil
 }
 
@@ -865,6 +869,7 @@ func getDate(resp *http.Response) *time.Time {
 
 func (s *S3Backend) PutBlob(param *PutBlobInput) (*PutBlobOutput, error) {
 	storageClass := s.config.StorageClass
+	s3Log.Debug("Entering putblob")
 	if param.Size != nil && *param.Size < 128*1024 && storageClass == "STANDARD_IA" {
 		storageClass = "STANDARD"
 	}
@@ -898,7 +903,7 @@ func (s *S3Backend) PutBlob(param *PutBlobInput) (*PutBlobOutput, error) {
 	if err != nil {
 		return nil, mapAwsError(err)
 	}
-
+	s3Log.Debug("Exiting Putblob")
 	return &PutBlobOutput{
 		ETag:         resp.ETag,
 		LastModified: getDate(req.HTTPResponse),
