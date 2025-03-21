@@ -832,6 +832,7 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 			}
 		}
 	}
+	s3Log.Debugf("Exiting GetBlob")
 	return &GetBlobOutput{
 		HeadBlobOutput: HeadBlobOutput{
 			BlobItemOutput: BlobItemOutput{
