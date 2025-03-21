@@ -366,33 +366,46 @@ func (s *S3Backend) getRequestId(r *request.Request) string {
 
 func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 	s3Log.Debugf("Entering HeadBlob")
-	head := s3.HeadObjectInput{Bucket: &s.bucket,
-		Key: &param.Key,
+	pathToClean := strings.Split(s.bucket+param.Key, `/`)
+	cleanedPath := ""
+	for i := range pathToClean {
+		cleanedPath += "/" + url.QueryEscape(pathToClean[i])
 	}
-	if s.config.SseC != "" {
-		head.SSECustomerAlgorithm = PString("AES256")
-		head.SSECustomerKey = &s.config.SseC
-		head.SSECustomerKeyMD5 = &s.config.SseCDigest
+	request := createRequest(os.Getenv("BUCKET_HOST"), "HEAD", cleanedPath)
+	res, errorz := s.httpClient.Do(request)
+	if errorz != nil {
+		fmt.Println(errorz)
+
+	}
+	// Build the information to be sent in the response
+	etag := res.Header.Get("ETag")
+	lastModified, _ := time.Parse("Mon, 02 Jan 2006 15:04:05 GMT", res.Header.Get("Last-Modified"))
+	size, _ := strconv.ParseUint(res.Header.Get("ContentLength"), 10, 64)
+	storageClass := res.Header.Get("x-amz-storage-class")
+	contentType := res.Header.Get("Content-Type")
+	amzRequest := res.Header.Get("x-amz-request-id") + ": " + res.Header.Get("x-amz-id-2")
+	amzMeta := make(map[string]*string)
+	for key, val := range res.Header {
+		if strings.HasPrefix("x-amz-meta-", key) {
+			for _, value := range val {
+				amzMeta[key] = &value
+			}
+		}
 	}
 
-	req, resp := s.S3.HeadObjectRequest(&head)
-	err := req.Send()
-	if err != nil {
-		return nil, mapAwsError(err)
-	}
 	s3Log.Debugf("Exiting Headblob")
 	return &HeadBlobOutput{
 		BlobItemOutput: BlobItemOutput{
 			Key:          &param.Key,
-			ETag:         resp.ETag,
-			LastModified: resp.LastModified,
-			Size:         uint64(*resp.ContentLength),
-			StorageClass: resp.StorageClass,
+			ETag:         &etag,
+			LastModified: &lastModified,
+			Size:         size,
+			StorageClass: &storageClass,
 		},
-		ContentType: resp.ContentType,
-		Metadata:    metadataToLower(resp.Metadata),
+		ContentType: &contentType,
+		Metadata:    metadataToLower(amzMeta),
 		IsDirBlob:   strings.HasSuffix(param.Key, "/"),
-		RequestId:   s.getRequestId(req),
+		RequestId:   amzRequest,
 	}, nil
 }
 
