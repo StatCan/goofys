@@ -470,8 +470,7 @@ func (s *S3Backend) DeleteBlob(param *DeleteBlobInput) (*DeleteBlobOutput, error
 	request := createRequest(os.Getenv("BUCKET_HOST"), "DELETE", cleanedPath)
 	res, e := s.httpClient.Do(request)
 	if e != nil {
-		fmt.Println(e)
-
+		s3Log.Debugf(e.Error())
 	}
 	amzRequest := res.Header.Get("x-amz-request-id") + ": " + res.Header.Get("x-amz-id-2")
 	s3Log.Debugf("Exiting DeleteBlob")
