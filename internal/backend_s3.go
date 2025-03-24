@@ -832,12 +832,11 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 	for i := range pathToClean {
 		cleanedPath += "/" + url.QueryEscape(pathToClean[i])
 	}
-
+	s3Log.Debugf("Cleaned Path:" + cleanedPath)
 	request := createRequest(os.Getenv("BUCKET_HOST"), "GET", cleanedPath)
 	res, e := s.httpClient.Do(request)
 	if e != nil {
-		fmt.Println(e)
-
+		s3Log.Debugf(e.Error())
 	}
 	// Build the information to be sent in the response
 	etag := res.Header.Get("ETag")
@@ -851,6 +850,7 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 		if strings.HasPrefix("x-amz-meta-", key) {
 			for _, value := range val {
 				amzMeta[key] = &value
+				s3Log.Debug("Key:" + key + "\nValue:" + value)
 			}
 		}
 	}
