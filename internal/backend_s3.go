@@ -832,8 +832,11 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 	for i := range pathToClean {
 		cleanedPath += "/" + url.QueryEscape(pathToClean[i])
 	}
-	s3Log.Debugf("Key:" + param.Key)
-	s3Log.Debugf("Cleaned Path:" + cleanedPath)
+	cleanedPath = strings.ReplaceAll(cleanedPath, "+", "%20")
+	s3Log.Debug("Key:" + param.Key)
+	s3Log.Debug("Cleaned Path:" + cleanedPath)
+	// Must replace any `+`'s to %20 https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html
+	// the QueryEscape encodes the space to +
 	request := createRequest(os.Getenv("BUCKET_HOST"), "GET", cleanedPath)
 	res, e := s.httpClient.Do(request)
 	if e != nil {
