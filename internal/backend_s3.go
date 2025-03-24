@@ -461,15 +461,21 @@ func (s *S3Backend) ListBlobs(param *ListBlobsInput) (*ListBlobsOutput, error) {
 }
 
 func (s *S3Backend) DeleteBlob(param *DeleteBlobInput) (*DeleteBlobOutput, error) {
-	req, _ := s.DeleteObjectRequest(&s3.DeleteObjectInput{
-		Bucket: &s.bucket,
-		Key:    &param.Key,
-	})
-	err := req.Send()
-	if err != nil {
-		return nil, mapAwsError(err)
+	s3Log.Debugf("Entering DeleteBlob")
+	pathToClean := strings.Split(s.bucket+param.Key, `/`)
+	cleanedPath := ""
+	for i := range pathToClean {
+		cleanedPath += "/" + url.QueryEscape(pathToClean[i])
 	}
-	return &DeleteBlobOutput{s.getRequestId(req)}, nil
+	request := createRequest(os.Getenv("BUCKET_HOST"), "DELETE", cleanedPath)
+	res, e := s.httpClient.Do(request)
+	if e != nil {
+		fmt.Println(e)
+
+	}
+	amzRequest := res.Header.Get("x-amz-request-id") + ": " + res.Header.Get("x-amz-id-2")
+	s3Log.Debugf("Exiting DeleteBlob")
+	return &DeleteBlobOutput{amzRequest}, nil
 }
 
 func (s *S3Backend) DeleteBlobs(param *DeleteBlobsInput) (*DeleteBlobsOutput, error) {
