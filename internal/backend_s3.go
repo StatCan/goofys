@@ -366,11 +366,7 @@ func (s *S3Backend) getRequestId(r *request.Request) string {
 
 func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 	s3Log.Debugf("Entering HeadBlob")
-	pathToClean := strings.Split(s.bucket+param.Key, `/`)
-	cleanedPath := ""
-	for i := range pathToClean {
-		cleanedPath += "/" + url.QueryEscape(pathToClean[i])
-	}
+	cleanedPath := returnURIPath(s.bucket + param.Key)
 	request := createRequest(os.Getenv("BUCKET_HOST"), "HEAD", cleanedPath)
 	res, e := s.httpClient.Do(request)
 	if e != nil {
@@ -462,11 +458,7 @@ func (s *S3Backend) ListBlobs(param *ListBlobsInput) (*ListBlobsOutput, error) {
 
 func (s *S3Backend) DeleteBlob(param *DeleteBlobInput) (*DeleteBlobOutput, error) {
 	s3Log.Debugf("Entering DeleteBlob")
-	pathToClean := strings.Split(s.bucket+param.Key, `/`)
-	cleanedPath := ""
-	for i := range pathToClean {
-		cleanedPath += "/" + url.QueryEscape(pathToClean[i])
-	}
+	cleanedPath := returnURIPath(s.bucket + param.Key)
 	request := createRequest(os.Getenv("BUCKET_HOST"), "DELETE", cleanedPath)
 	res, e := s.httpClient.Do(request)
 	if e != nil {
@@ -823,20 +815,22 @@ func createRequest(host string, method string, filePath string) *http.Request {
 	return req
 }
 
-func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
-	// s.bucket and param.Key combine nicely with good slash management. The final path we want looks something like;
-	// /bucket/path/path2/.../file.txt
-	// Example -> s.bucket: 1121045215484495542 and param.Key: jose/new,file.txt
-	pathToClean := strings.Split(s.bucket+param.Key, `/`)
+// s.bucket and param.Key combine nicely with good slash management. The final path we want looks something like;
+// /bucket/path/path2/.../file.txt
+// Example -> s.bucket: 1121045215484495542 and param.Key: jose/new,file.txt
+func returnURIPath(fullPath string) string {
+	pathToClean := strings.Split(fullPath, `/`)
 	cleanedPath := ""
 	for i := range pathToClean {
 		cleanedPath += "/" + url.QueryEscape(pathToClean[i])
 	}
-	cleanedPath = strings.ReplaceAll(cleanedPath, "+", "%20")
-	s3Log.Debug("Key:" + param.Key)
-	s3Log.Debug("Cleaned Path:" + cleanedPath)
 	// Must replace any `+`'s to %20 https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html
 	// the QueryEscape encodes the space to +
+	cleanedPath = strings.ReplaceAll(cleanedPath, "+", "%20")
+	return cleanedPath
+}
+func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
+	cleanedPath := returnURIPath(s.bucket + param.Key)
 	request := createRequest(os.Getenv("BUCKET_HOST"), "GET", cleanedPath)
 	res, e := s.httpClient.Do(request)
 	if e != nil {
