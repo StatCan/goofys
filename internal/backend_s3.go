@@ -372,9 +372,9 @@ func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 		cleanedPath += "/" + url.QueryEscape(pathToClean[i])
 	}
 	request := createRequest(os.Getenv("BUCKET_HOST"), "HEAD", cleanedPath)
-	res, errorz := s.httpClient.Do(request)
-	if errorz != nil {
-		fmt.Println(errorz)
+	res, e := s.httpClient.Do(request)
+	if e != nil {
+		fmt.Println(e)
 
 	}
 	// Build the information to be sent in the response
@@ -829,23 +829,23 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 	}
 
 	request := createRequest(os.Getenv("BUCKET_HOST"), "GET", cleanedPath)
-	res, errorz := s.httpClient.Do(request)
-	if errorz != nil {
-		fmt.Println(errorz)
+	res, e := s.httpClient.Do(request)
+	if e != nil {
+		fmt.Println(e)
 
 	}
 	// Build the information to be sent in the response
 	etag := res.Header.Get("ETag")
 	lastModified, _ := time.Parse("Mon, 02 Jan 2006 15:04:05 GMT", res.Header.Get("Last-Modified"))
-	size1, _ := strconv.ParseUint(res.Header.Get("ContentLength"), 10, 64)
-	storageClass1 := res.Header.Get("x-amz-storage-class")
-	contentType1 := res.Header.Get("Content-Type")
+	size, _ := strconv.ParseUint(res.Header.Get("ContentLength"), 10, 64)
+	storageClass := res.Header.Get("x-amz-storage-class")
+	contentType := res.Header.Get("Content-Type")
 	amzRequest := res.Header.Get("x-amz-request-id") + ": " + res.Header.Get("x-amz-id-2")
-	amzMeta1 := make(map[string]*string)
+	amzMeta := make(map[string]*string)
 	for key, val := range res.Header {
 		if strings.HasPrefix("x-amz-meta-", key) {
 			for _, value := range val {
-				amzMeta1[key] = &value
+				amzMeta[key] = &value
 			}
 		}
 	}
@@ -856,11 +856,11 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 				Key:          &param.Key, // Does not need to be encoded
 				ETag:         &etag,
 				LastModified: &lastModified,
-				Size:         size1,
-				StorageClass: &storageClass1,
+				Size:         size,
+				StorageClass: &storageClass,
 			},
-			ContentType: &contentType1,
-			Metadata:    metadataToLower(amzMeta1),
+			ContentType: &contentType,
+			Metadata:    metadataToLower(amzMeta),
 		},
 		Body:      io.NopCloser(res.Body), // Without the NopCloser the calling function will not be able to use this
 		RequestId: amzRequest,
