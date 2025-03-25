@@ -666,6 +666,7 @@ func (s *S3Backend) CopyBlob(param *CopyBlobInput) (*CopyBlobOutput, error) {
 
 	COPY_LIMIT := uint64(5 * 1024 * 1024 * 1024)
 
+	// this if is fine, just goes into headblob
 	if param.Size == nil || param.ETag == nil || (*param.Size > COPY_LIMIT &&
 		(param.Metadata == nil || param.StorageClass == nil)) {
 
@@ -691,22 +692,14 @@ func (s *S3Backend) CopyBlob(param *CopyBlobInput) (*CopyBlobOutput, error) {
 		}
 	}
 
-	from := s.bucket + "/" + param.Source
-
-	/*
-		if !s.gcs && *param.Size > COPY_LIMIT {
-			reqId, err := s.copyObjectMultipart(int64(*param.Size), from, param.Destination, "", param.ETag, param.Metadata, param.StorageClass)
-			if err != nil {
-				return nil, err
-			}
-			return &CopyBlobOutput{reqId}, nil
-		}
-	*/
+	from := returnURIPath(s.bucket + param.Source)
+	key := returnURIPath(param.Destination)
+	key = key[1:] // We don't want the first `/`
 
 	params := &s3.CopyObjectInput{
 		Bucket:            &s.bucket,
-		CopySource:        aws.String(url.QueryEscape(from)),
-		Key:               &param.Destination,
+		CopySource:        aws.String(from),
+		Key:               &key,
 		StorageClass:      param.StorageClass,
 		ContentType:       s.flags.GetMimeType(param.Destination),
 		Metadata:          metadataToLower(param.Metadata),
