@@ -693,13 +693,13 @@ func (s *S3Backend) CopyBlob(param *CopyBlobInput) (*CopyBlobOutput, error) {
 	}
 
 	from := returnURIPath(s.bucket + param.Source)
-	key := returnURIPath(param.Destination)
-	key = key[1:] // We don't want the first `/`
+	// key := returnURIPath(param.Destination)
+	// key = key[1:] // We don't want the first `/`
 
 	params := &s3.CopyObjectInput{
 		Bucket:            &s.bucket,
 		CopySource:        aws.String(from),
-		Key:               &key,
+		Key:               &param.Destination, //change to key after
 		StorageClass:      param.StorageClass,
 		ContentType:       s.flags.GetMimeType(param.Destination),
 		Metadata:          metadataToLower(param.Metadata),
