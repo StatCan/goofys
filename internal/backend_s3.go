@@ -759,18 +759,19 @@ func generateSignature(timeStampISO8601Format string, timestampYMD string, hashe
 	canonicalRequest += filePath + "\n" // canoniocalURI
 	canonicalRequest += "\n"            // canonicalQueryString: what comes after the "?" if none then just \n, if for other functions they need more
 	// we will edit it then, but for just get it is empty
-	if method == "PUT" {
-		canonicalRequest += "content-length:PLACEHOLDER" + "\n" + // Canonical Headers
-			"content-md5:PLACEHOLDER" + "\n" +
-			"host:" + host + "\n" +
-			"x-amz-content-sha256:" + hashedPayload + "\n" + // this SHA is that of an empty string, at least for GET
-			"x-amz-date:" + timeStampISO8601Format + "\n\n"
-	} else {
-		canonicalRequest += "host:" + host + "\n" + // Canonical Headers
-			"x-amz-content-sha256:" + hashedPayload + "\n" + // this SHA is that of an empty string, at least for GET
-			"x-amz-date:" + timeStampISO8601Format + "\n\n"
-		// has to be double newline after last header because theres the newline after each header and then one after the group
-	}
+	// test without the content--length and contend-md5 headers for put
+	// if method == "PUT" {
+	// 	canonicalRequest += "content-length:PLACEHOLDER" + "\n" + // Canonical Headers
+	// 		"content-md5:PLACEHOLDER" + "\n" +
+	// 		"host:" + host + "\n" +
+	// 		"x-amz-content-sha256:" + hashedPayload + "\n" + // this SHA is that of an empty string, at least for GET
+	// 		"x-amz-date:" + timeStampISO8601Format + "\n\n"
+	// } else {
+	canonicalRequest += "host:" + host + "\n" + // Canonical Headers
+		"x-amz-content-sha256:" + hashedPayload + "\n" + // this SHA is that of an empty string, at least for GET
+		"x-amz-date:" + timeStampISO8601Format + "\n\n"
+	// has to be double newline after last header because theres the newline after each header and then one after the group
+	//}
 
 	canonicalRequest += "host;x-amz-content-sha256;x-amz-date\n" // signed headers, alphabetically sorted
 	canonicalRequest += hashedPayload
@@ -947,11 +948,23 @@ func (s *S3Backend) PutBlob(param *PutBlobInput) (*PutBlobOutput, error) {
 	cleanedPath := returnURIPath(s.bucket + param.Key)
 	s3Log.Debug(cleanedPath)
 	// the question may be do i need the headers of content length and that
-	//request := createRequest(os.Getenv("BUCKET_HOST"), "PUT", cleanedPath, param.Body)
-	// res, e := s.httpClient.Do(request)
-	// if e != nil {
-	// 	s3Log.Debugf(e.Error())
-	// }
+	request := createRequest(os.Getenv("BUCKET_HOST"), "PUT", cleanedPath, param.Body)
+	res, e := s.httpClient.Do(request)
+	if e != nil {
+		s3Log.Debugf(e.Error())
+	}
+	etag := res.Header.Get("ETag")
+	lastModified, _ := time.Parse("Mon, 02 Jan 2006 15:04:05 GMT", res.Header.Get("Date"))
+	// Use the `Date` header over `lastModified` as that's what was used in this `PutBlob` initially
+	//storageClass = res.Header.Get("x-amz-storage-class") // seemingly unused
+	amzRequest := res.Header.Get("x-amz-request-id") + ": " + res.Header.Get("x-amz-id-2")
+	s3Log.Debug("Exiting Putblob")
+	return &PutBlobOutput{
+		ETag:         &etag,
+		LastModified: &lastModified,
+		StorageClass: &storageClass,
+		RequestId:    amzRequest,
+	}, nil
 	// end test ours
 
 	put := &s3.PutObjectInput{
