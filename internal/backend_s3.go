@@ -898,19 +898,24 @@ func (s *S3Backend) PutBlob(param *PutBlobInput) (*PutBlobOutput, error) {
 		StorageClass: &storageClass,
 		ContentType:  param.ContentType,
 	}
+	s3Log.Debugf("PutObjectInput: %v", param)
 
 	if s.config.UseSSE {
+		s3Log.Debug("Using SSE")
 		put.ServerSideEncryption = &s.sseType
 		if s.config.UseKMS && s.config.KMSKeyID != "" {
+			s3Log.Debug("UseKMS and KMSID")
 			put.SSEKMSKeyId = &s.config.KMSKeyID
 		}
 	} else if s.config.SseC != "" {
+		s3Log.Debug("SSEC != empty, setting cust algo")
 		put.SSECustomerAlgorithm = PString("AES256")
 		put.SSECustomerKey = &s.config.SseC
 		put.SSECustomerKeyMD5 = &s.config.SseCDigest
 	}
 
 	if s.config.ACL != "" {
+		s3Log.Debug("Put ACL")
 		put.ACL = &s.config.ACL
 	}
 
