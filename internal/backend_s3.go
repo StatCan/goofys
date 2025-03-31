@@ -789,6 +789,7 @@ func getDate(resp *http.Response) *time.Time {
 }
 
 func (s *S3Backend) PutBlob(param *PutBlobInput) (*PutBlobOutput, error) {
+	s3Log.Debugf("Entering PutBlob")
 	storageClass := s.config.StorageClass
 	if param.Size != nil && *param.Size < 128*1024 && storageClass == "STANDARD_IA" {
 		storageClass = "STANDARD"
@@ -823,7 +824,7 @@ func (s *S3Backend) PutBlob(param *PutBlobInput) (*PutBlobOutput, error) {
 	if err != nil {
 		return nil, mapAwsError(err)
 	}
-
+	s3Log.Debug("Exiting Putblob")
 	return &PutBlobOutput{
 		ETag:         resp.ETag,
 		LastModified: getDate(req.HTTPResponse),
