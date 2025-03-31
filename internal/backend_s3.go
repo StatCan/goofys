@@ -815,6 +815,7 @@ func createRequest(host string, method string, filePath string, body io.ReadSeek
 	contentLength := ""
 	if method == "PUT" {
 		contentLength, md5hashedPayload, sha256hashedPayload, _ = hashAndLengthReadSeeker(body)
+		s3Log.Debug("MD5 unused:" + md5hashedPayload)
 	} else {
 		hasher := sha256.New()
 		hasher.Write([]byte(""))
@@ -832,14 +833,17 @@ func createRequest(host string, method string, filePath string, body io.ReadSeek
 	// 	"/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date,Signature="+signature)
 	// Is the below even necessary (like having the specific content headers)
 	if method == "PUT" {
-		req.Header.Add("Content-Length", contentLength)     // placeholder EDIT
-		req.Header.Add("Content-Md5", md5hashedPayload)     // placeholder EDIT is this necessary
+		req.Header.Add("Content-Length", contentLength) // placeholder EDIT
+		//req.Header.Add("Content-Md5", md5hashedPayload)     // placeholder EDIT is this necessary
+		//MD-5 isnt required so ill omit it
 		req.Header.Add("X-Amz-Storage-Class", storageClass) // does this need to be in order
 		s3Log.Debug("Md5Hashed:" + md5hashedPayload)
 		s3Log.Debug("Sha256Hashed:" + sha256hashedPayload)
 		// change the below to accomodate new headers
 		req.Header.Add("Authorization", "AWS4-HMAC-SHA256 Credential="+os.Getenv("AWS_ACCESS_KEY_ID")+"/"+timestampYMD+
-			"/us-east-1/s3/aws4_request, SignedHeaders=content-length;content-md5;host;x-amz-content-sha256;x-amz-date,Signature="+signature)
+			"/us-east-1/s3/aws4_request, SignedHeaders=content-length;host;x-amz-content-sha256;x-amz-date,Signature="+signature)
+		// trying without content-md5
+		//"/us-east-1/s3/aws4_request, SignedHeaders=content-length;content-md5;host;x-amz-content-sha256;x-amz-date,Signature="+signature)
 	} else {
 		req.Header.Add("Authorization", "AWS4-HMAC-SHA256 Credential="+os.Getenv("AWS_ACCESS_KEY_ID")+"/"+timestampYMD+
 			"/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date,Signature="+signature)
@@ -941,7 +945,7 @@ func hashAndLengthReadSeeker(rs io.ReadSeeker) (string, string, string, error) {
 	if err != nil {
 		return "0", "", "", err
 	}
-	s3Log.Debug("Returning from hashAndLength")
+	s3Log.Debugf("Returning from hashandlegnth, md5 unencoded: %v", md5)
 	// Return the computed hash
 	return strconv.FormatInt(contentLength, 10), hex.EncodeToString(md5), hex.EncodeToString(sha256), nil
 }
