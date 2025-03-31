@@ -368,7 +368,7 @@ func (s *S3Backend) getRequestId(r *request.Request) string {
 func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 	s3Log.Debugf("Entering HeadBlob")
 	cleanedPath := returnURIPath(s.bucket + param.Key)
-	request := createRequest(os.Getenv("BUCKET_HOST"), "HEAD", cleanedPath, nil)
+	request := createRequest(os.Getenv("BUCKET_HOST"), "HEAD", cleanedPath, nil, "")
 	res, e := s.httpClient.Do(request)
 	if e != nil {
 		fmt.Println(e)
@@ -460,7 +460,7 @@ func (s *S3Backend) ListBlobs(param *ListBlobsInput) (*ListBlobsOutput, error) {
 func (s *S3Backend) DeleteBlob(param *DeleteBlobInput) (*DeleteBlobOutput, error) {
 	s3Log.Debugf("Entering DeleteBlob")
 	cleanedPath := returnURIPath(s.bucket + param.Key)
-	request := createRequest(os.Getenv("BUCKET_HOST"), "DELETE", cleanedPath, nil)
+	request := createRequest(os.Getenv("BUCKET_HOST"), "DELETE", cleanedPath, nil, "")
 	res, e := s.httpClient.Do(request)
 	if e != nil {
 		s3Log.Debugf(e.Error())
@@ -751,7 +751,7 @@ func (s *S3Backend) CopyBlob(param *CopyBlobInput) (*CopyBlobOutput, error) {
 	return &CopyBlobOutput{s.getRequestId(req)}, nil
 }
 
-func generateSignature(timeStampISO8601Format string, timestampYMD string, sha256HashedPayload string, host string, filePath string, method string, contentLength string, md5HashedPayload string) string {
+func generateSignature(timeStampISO8601Format string, timestampYMD string, sha256HashedPayload string, host string, filePath string, method string, contentLength string, md5HashedPayload string, sc string) string {
 	s3Log.Debug("Generating Signature")
 	// https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html
 	// must create the Canonical Request
@@ -765,8 +765,9 @@ func generateSignature(timeStampISO8601Format string, timestampYMD string, sha25
 			"content-md5:" + md5HashedPayload + "\n" +
 			"host:" + host + "\n" +
 			"x-amz-content-sha256:" + sha256HashedPayload + "\n" + // this SHA is that of an empty string, at least for GET
-			"x-amz-date:" + timeStampISO8601Format + "\n\n"
-		canonicalRequest += "content-length;content-md5;host;x-amz-content-sha256;x-amz-date\n" // signed headers
+			"x-amz-date:" + timeStampISO8601Format + "\n" +
+			"x-amz-storage-class:" + sc + "\n\n"
+		canonicalRequest += "content-length;content-md5;host;x-amz-content-sha256;x-amz-date;x-amz-storage-class\n" // signed headers
 	} else {
 		canonicalRequest += "host:" + host + "\n" + // Canonical Headers
 			"x-amz-content-sha256:" + sha256HashedPayload + "\n" + // this SHA is that of an empty string, at least for GET
@@ -802,7 +803,7 @@ func getHMAC(key []byte, data []byte) []byte {
 }
 
 // May need to modify once we get to `PUT`
-func createRequest(host string, method string, filePath string, body io.ReadSeeker) *http.Request {
+func createRequest(host string, method string, filePath string, body io.ReadSeeker, storageClass string) *http.Request {
 	// Generate values to be re-used, the date, the hashed payload
 	timeStampISO8601Format := time.Now().Format("20060102T150405Z")
 	timestampYMD := time.Now().Format("20060102")
@@ -826,13 +827,14 @@ func createRequest(host string, method string, filePath string, body io.ReadSeek
 	if err != nil {
 		s3Log.Debugf("Error in createRequest:%v", err)
 	}
-	signature := generateSignature(timeStampISO8601Format, timestampYMD, sha256hashedPayload, host, filePath, method, contentLength, md5hashedPayload)
+	signature := generateSignature(timeStampISO8601Format, timestampYMD, sha256hashedPayload, host, filePath, method, contentLength, md5hashedPayload, storageClass)
 	// req.Header.Add("Authorization", "AWS4-HMAC-SHA256 Credential="+os.Getenv("AWS_ACCESS_KEY_ID")+"/"+timestampYMD+
 	// 	"/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date,Signature="+signature)
 	// Is the below even necessary (like having the specific content headers)
 	if method == "PUT" {
-		req.Header.Add("Content-Length", contentLength) // placeholder EDIT
-		req.Header.Add("Content-Md5", md5hashedPayload) // placeholder EDIT is this necessary
+		req.Header.Add("Content-Length", contentLength)     // placeholder EDIT
+		req.Header.Add("Content-Md5", md5hashedPayload)     // placeholder EDIT is this necessary
+		req.Header.Add("X-Amz-Storage-Class", storageClass) // does this need to be in order
 		s3Log.Debug("Md5Hashed:" + md5hashedPayload)
 		s3Log.Debug("Sha256Hashed:" + sha256hashedPayload)
 		// change the below to accomodate new headers
@@ -867,7 +869,7 @@ func returnURIPath(fullPath string) string {
 }
 func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 	cleanedPath := returnURIPath(s.bucket + param.Key)
-	request := createRequest(os.Getenv("BUCKET_HOST"), "GET", cleanedPath, nil)
+	request := createRequest(os.Getenv("BUCKET_HOST"), "GET", cleanedPath, nil, "")
 	res, e := s.httpClient.Do(request)
 	if e != nil {
 		s3Log.Debugf(e.Error())
@@ -953,7 +955,7 @@ func (s *S3Backend) PutBlob(param *PutBlobInput) (*PutBlobOutput, error) {
 	cleanedPath := returnURIPath(s.bucket + param.Key)
 	s3Log.Debug(cleanedPath)
 	// the question may be do i need the headers of content length and that
-	request := createRequest(os.Getenv("BUCKET_HOST"), "PUT", cleanedPath, param.Body)
+	request := createRequest(os.Getenv("BUCKET_HOST"), "PUT", cleanedPath, param.Body, storageClass)
 	res, e := s.httpClient.Do(request)
 	if e != nil {
 		s3Log.Debugf(e.Error())
