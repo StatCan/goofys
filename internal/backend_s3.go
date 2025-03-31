@@ -791,6 +791,7 @@ func generateSignature(timeStampISO8601Format string, timestampYMD string, sha25
 	signingKey := getHMAC(dateRegionServiceKey, []byte("aws4_request"))
 	// create the signature
 	signature := hex.EncodeToString(getHMAC(signingKey, []byte(stringToSign)))
+	s3Log.Debugf("Canonical Request:" + canonicalRequest)
 	return signature
 }
 
@@ -798,10 +799,6 @@ func getHMAC(key []byte, data []byte) []byte {
 	hash := hmac.New(sha256.New, key)
 	hash.Write(data)
 	return hash.Sum(nil)
-}
-func getMD5Hash(text string) string {
-	hash := md5.Sum([]byte(text))
-	return hex.EncodeToString(hash[:])
 }
 
 // May need to modify once we get to `PUT`
@@ -836,6 +833,8 @@ func createRequest(host string, method string, filePath string, body io.ReadSeek
 	if method == "PUT" {
 		req.Header.Add("Content-Length", contentLength) // placeholder EDIT
 		req.Header.Add("Content-Md5", md5hashedPayload) // placeholder EDIT is this necessary
+		s3Log.Debug("Md5Hashed:" + md5hashedPayload)
+		s3Log.Debug("Sha256Hashed:" + sha256hashedPayload)
 		// change the below to accomodate new headers
 		req.Header.Add("Authorization", "AWS4-HMAC-SHA256 Credential="+os.Getenv("AWS_ACCESS_KEY_ID")+"/"+timestampYMD+
 			"/us-east-1/s3/aws4_request, SignedHeaders=content-length;content-md5;host;x-amz-content-sha256;x-amz-date,Signature="+signature)
@@ -940,6 +939,7 @@ func hashAndLengthReadSeeker(rs io.ReadSeeker) (string, string, string, error) {
 	if err != nil {
 		return "0", "", "", err
 	}
+	s3Log.Debug("Returning from hashAndLength")
 	// Return the computed hash
 	return strconv.FormatInt(contentLength, 10), hex.EncodeToString(md5), hex.EncodeToString(sha256), nil
 }
@@ -963,7 +963,7 @@ func (s *S3Backend) PutBlob(param *PutBlobInput) (*PutBlobOutput, error) {
 	// Use the `Date` header over `lastModified` as that's what was used in this `PutBlob` initially
 	//storageClass = res.Header.Get("x-amz-storage-class") // seemingly unused
 	amzRequest := res.Header.Get("x-amz-request-id") + ": " + res.Header.Get("x-amz-id-2")
-	s3Log.Debug("Exiting Putblob")
+	s3Log.Debug("Exiting Putblob") // does this exit prematurely?
 	return &PutBlobOutput{
 		ETag:         &etag,
 		LastModified: &lastModified,
