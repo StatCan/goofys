@@ -367,27 +367,7 @@ func (s *S3Backend) getRequestId(r *request.Request) string {
 func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 	s3Log.Debugf("Entering HeadBlob")
 	cleanedPath := returnURIPath(s.bucket + param.Key)
-	request := createRequest(os.Getenv("BUCKET_HOST"), "HEAD", cleanedPath)
-	res, e := s.httpClient.Do(request)
-	if e != nil {
-		fmt.Println(e)
-
-	}
-	// Build the information to be sent in the response
-	etag := res.Header.Get("ETag")
-	lastModified, _ := time.Parse("Mon, 02 Jan 2006 15:04:05 GMT", res.Header.Get("Last-Modified"))
-	size, _ := strconv.ParseUint(res.Header.Get("ContentLength"), 10, 64)
-	storageClass := res.Header.Get("x-amz-storage-class")
-	contentType := res.Header.Get("Content-Type")
-	amzRequest := res.Header.Get("x-amz-request-id") + ": " + res.Header.Get("x-amz-id-2")
-	amzMeta := make(map[string]*string)
-	for key, val := range res.Header {
-		if strings.HasPrefix("x-amz-meta-", key) {
-			for _, value := range val {
-				amzMeta[key] = &value
-			}
-		}
-	}
+	etag, lastModified, size, storageClass, contentType, amzRequest, amzMeta, _ := s.sendRequest("HEAD", cleanedPath)
 
 	s3Log.Debugf("Exiting Headblob")
 	return &HeadBlobOutput{
@@ -459,12 +439,7 @@ func (s *S3Backend) ListBlobs(param *ListBlobsInput) (*ListBlobsOutput, error) {
 func (s *S3Backend) DeleteBlob(param *DeleteBlobInput) (*DeleteBlobOutput, error) {
 	s3Log.Debugf("Entering DeleteBlob")
 	cleanedPath := returnURIPath(s.bucket + param.Key)
-	request := createRequest(os.Getenv("BUCKET_HOST"), "DELETE", cleanedPath)
-	res, e := s.httpClient.Do(request)
-	if e != nil {
-		s3Log.Debugf(e.Error())
-	}
-	amzRequest := res.Header.Get("x-amz-request-id") + ": " + res.Header.Get("x-amz-id-2")
+	_, _, _, _, _, amzRequest, _, _ := s.sendRequest("DELETE", cleanedPath)
 	s3Log.Debugf("Exiting DeleteBlob")
 	return &DeleteBlobOutput{amzRequest}, nil
 }
@@ -827,9 +802,9 @@ func returnURIPath(fullPath string) string {
 	cleanedPath = strings.ReplaceAll(cleanedPath, "+", "%20")
 	return cleanedPath
 }
-func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
-	cleanedPath := returnURIPath(s.bucket + param.Key)
-	request := createRequest(os.Getenv("BUCKET_HOST"), "GET", cleanedPath)
+
+func (s *S3Backend) sendRequest(method string, cleanedPath string) (string, time.Time, uint64, string, string, string, map[string]*string, io.ReadCloser) {
+	request := createRequest(os.Getenv("BUCKET_HOST"), method, cleanedPath)
 	res, e := s.httpClient.Do(request)
 	if e != nil {
 		s3Log.Debugf(e.Error())
@@ -850,6 +825,11 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 			}
 		}
 	}
+	return etag, lastModified, size, storageClass, contentType, amzRequest, amzMeta, io.NopCloser(res.Body)
+}
+func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
+	cleanedPath := returnURIPath(s.bucket + param.Key)
+	etag, lastModified, size, storageClass, contentType, amzRequest, amzMeta, body := s.sendRequest("GET", cleanedPath)
 	s3Log.Debugf("Exiting GetBlob")
 	return &GetBlobOutput{
 		HeadBlobOutput: HeadBlobOutput{
@@ -863,7 +843,7 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 			ContentType: &contentType,
 			Metadata:    metadataToLower(amzMeta),
 		},
-		Body:      io.NopCloser(res.Body), // Without the NopCloser the calling function will not be able to use this
+		Body:      body, // Without the NopCloser the calling function will not be able to use this
 		RequestId: amzRequest,
 	}, nil
 }
