@@ -789,7 +789,7 @@ func createRequest(host string, method string, filePath string) *http.Request {
 	req.Header.Add(amzContentShaHeader, hashedPayload)
 	req.Header.Add(amzDateHeader, timeStampISO8601Format)
 	req.Header.Add("Authorization", aws4HmacSha256 + " Credential="+os.Getenv("AWS_ACCESS_KEY_ID")+"/"+timestampYMD+
-		"/us-east-1/s3/aws4_request, SignedHeaders=host;"+ strings.ToLower(amzContentShaHeader) ";" + strings.ToLower(amzDateHeader)",Signature="+signature)
+		"/us-east-1/s3/aws4_request, SignedHeaders=host;"+ strings.ToLower(amzContentShaHeader) + ";" + strings.ToLower(amzDateHeader) + ",Signature="+signature)
 	// Example of what the request header should look like below
 	// AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20130524/us-east-1/s3/aws4_request,SignedHeaders=host;range;x-amz-content-sha256;x-amz-date,Signature=f0e8bdb87c964420e857bd35b5d6ed310bd44f0170aba48dd91039c6036bdb41
 	return req
