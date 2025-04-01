@@ -15,6 +15,12 @@
 package internal
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
+	"io"
+	"os"
+
 	. "github.com/StatCan/goofys/api/common"
 
 	"fmt"
@@ -40,16 +46,20 @@ type S3Backend struct {
 	*s3.S3
 	cap Capabilities
 
-	bucket    string
-	awsConfig *aws.Config
-	flags     *FlagStorage
-	config    *S3Config
-	sseType   string
-
-	aws      bool
-	gcs      bool
-	v2Signer bool
+	bucket     string
+	awsConfig  *aws.Config
+	flags      *FlagStorage
+	config     *S3Config
+	sseType    string
+	httpClient *http.Client
+	aws        bool
+	gcs        bool
+	v2Signer   bool
 }
+
+const amzContentShaHeader = "X-Amz-Content-Sha256"
+const amzDateHeader = "X-Amz-Date"
+const aws4HmacSha256 = "AWS4-HMAC-SHA256"
 
 func NewS3(bucket string, flags *FlagStorage, config *S3Config) (*S3Backend, error) {
 	awsConfig, err := config.ToAwsConfig(flags)
@@ -57,10 +67,11 @@ func NewS3(bucket string, flags *FlagStorage, config *S3Config) (*S3Backend, err
 		return nil, err
 	}
 	s := &S3Backend{
-		bucket:    bucket,
-		awsConfig: awsConfig,
-		flags:     flags,
-		config:    config,
+		bucket:     bucket,
+		awsConfig:  awsConfig,
+		flags:      flags,
+		config:     config,
+		httpClient: &http.Client{},
 		cap: Capabilities{
 			Name: "s3-jose-test",
 			// MaxMultipartSize doesnt seem to be respected? or at least it goes to multipart right away.
@@ -287,7 +298,7 @@ func (s *S3Backend) Init(key string) error {
 }
 
 func (s *S3Backend) ListObjectsV2(params *s3.ListObjectsV2Input) (*s3.ListObjectsV2Output, string, error) {
-	s3Log.Debugf("MATHIS TEST: params %v, backend %v", params, s)
+	s3Log.Debugf("ListObjectsV2: params %v, backend %v", params, s)
 	if s.aws {
 		req, resp := s.S3.ListObjectsV2Request(params)
 		err := req.Send()
@@ -314,7 +325,7 @@ func (s *S3Backend) ListObjectsV2(params *s3.ListObjectsV2Input) (*s3.ListObject
 		if err != nil {
 			return nil, "", err
 		}
-		s3Log.Debugf("MATHIS TEST: objs %v, err %v", objs, err)
+		s3Log.Debugf("ListObjectsV2: objs %v, err %v", objs, err)
 		count := int64(len(objs.Contents))
 		v2Objs := s3.ListObjectsV2Output{
 			CommonPrefixes:        objs.CommonPrefixes,
@@ -358,38 +369,29 @@ func (s *S3Backend) getRequestId(r *request.Request) string {
 }
 
 func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
-	head := s3.HeadObjectInput{Bucket: &s.bucket,
-		Key: &param.Key,
-	}
-	if s.config.SseC != "" {
-		head.SSECustomerAlgorithm = PString("AES256")
-		head.SSECustomerKey = &s.config.SseC
-		head.SSECustomerKeyMD5 = &s.config.SseCDigest
-	}
+	s3Log.Debugf("Entering HeadBlob")
+	cleanedPath := returnURIPath(s.bucket + param.Key)
+	etag, lastModified, size, storageClass, contentType, amzRequest, amzMeta, _ := s.sendRequest("HEAD", cleanedPath)
 
-	req, resp := s.S3.HeadObjectRequest(&head)
-	err := req.Send()
-	if err != nil {
-		return nil, mapAwsError(err)
-	}
+	s3Log.Debugf("Exiting Headblob")
 	return &HeadBlobOutput{
 		BlobItemOutput: BlobItemOutput{
 			Key:          &param.Key,
-			ETag:         resp.ETag,
-			LastModified: resp.LastModified,
-			Size:         uint64(*resp.ContentLength),
-			StorageClass: resp.StorageClass,
+			ETag:         &etag,
+			LastModified: &lastModified,
+			Size:         size,
+			StorageClass: &storageClass,
 		},
-		ContentType: resp.ContentType,
-		Metadata:    metadataToLower(resp.Metadata),
+		ContentType: &contentType,
+		Metadata:    metadataToLower(amzMeta),
 		IsDirBlob:   strings.HasSuffix(param.Key, "/"),
-		RequestId:   s.getRequestId(req),
+		RequestId:   amzRequest,
 	}, nil
 }
 
 func (s *S3Backend) ListBlobs(param *ListBlobsInput) (*ListBlobsOutput, error) {
 	var maxKeys *int64
-	s3Log.Debugf("MATHIS TEST")
+	s3Log.Debugf("ListBlobs")
 	if param.MaxKeys != nil {
 		maxKeys = aws.Int64(int64(*param.MaxKeys))
 	}
@@ -402,7 +404,7 @@ func (s *S3Backend) ListBlobs(param *ListBlobsInput) (*ListBlobsOutput, error) {
 		StartAfter:        param.StartAfter,
 		ContinuationToken: param.ContinuationToken,
 	})
-	s3Log.Debugf("MATHIS TEST: resp %v, reqid %v, err %v", resp, reqId, err)
+	s3Log.Debugf("ListBlobs: resp %v, reqid %v, err %v", resp, reqId, err)
 	if err != nil {
 		return nil, mapAwsError(err)
 	}
@@ -422,12 +424,12 @@ func (s *S3Backend) ListBlobs(param *ListBlobsInput) (*ListBlobsOutput, error) {
 			StorageClass: i.StorageClass,
 		})
 	}
-	s3Log.Debugf("MATHIS TEST: prefixes %v, items %v", prefixes, items)
+	s3Log.Debugf("ListBlobs: prefixes %v, items %v", prefixes, items)
 	isTruncatedFlag := false
 	if resp.IsTruncated != nil {
 		isTruncatedFlag = *resp.IsTruncated
 	} else {
-		s3Log.Debugf("MATHIS TEST: nil pointer catch")
+		s3Log.Debugf("ListBlobs: nil pointer catch")
 	}
 	return &ListBlobsOutput{
 		Prefixes:              prefixes,
@@ -439,15 +441,11 @@ func (s *S3Backend) ListBlobs(param *ListBlobsInput) (*ListBlobsOutput, error) {
 }
 
 func (s *S3Backend) DeleteBlob(param *DeleteBlobInput) (*DeleteBlobOutput, error) {
-	req, _ := s.DeleteObjectRequest(&s3.DeleteObjectInput{
-		Bucket: &s.bucket,
-		Key:    &param.Key,
-	})
-	err := req.Send()
-	if err != nil {
-		return nil, mapAwsError(err)
-	}
-	return &DeleteBlobOutput{s.getRequestId(req)}, nil
+	s3Log.Debugf("Entering DeleteBlob")
+	cleanedPath := returnURIPath(s.bucket + param.Key)
+	_, _, _, _, _, amzRequest, _, _ := s.sendRequest("DELETE", cleanedPath)
+	s3Log.Debugf("Exiting DeleteBlob")
+	return &DeleteBlobOutput{amzRequest}, nil
 }
 
 func (s *S3Backend) DeleteBlobs(param *DeleteBlobsInput) (*DeleteBlobsOutput, error) {
@@ -517,7 +515,7 @@ func (s *S3Backend) mpuCopyPart(from string, to string, mpuId string, bytes stri
 	return
 }
 
-func sizeToParts(size int64) (int, int64) { // this shouldnt matter, since this mpu shouldnt get called.
+func sizeToParts(size int64) (int, int64) {
 	const MAX_S3_MPU_SIZE int64 = 5 * 1024 * 1024 * 1024 * 1024
 	if size > MAX_S3_MPU_SIZE {
 		panic(fmt.Sprintf("object size: %v exceeds maximum S3 MPU size: %v", size, MAX_S3_MPU_SIZE))
@@ -562,15 +560,13 @@ func (s *S3Backend) mpuCopyParts(size int64, from string, to string, mpuId strin
 	sem.V(MAX_CONCURRENCY)
 }
 
-// This shouldnt get reached, the only reference to `copyObjectMultip` was commented out (other than the test)
-// Assuming that this backend_s3.go is the one that is used.
 func (s *S3Backend) copyObjectMultipart(size int64, from string, to string, mpuId string,
 	srcEtag *string, metadata map[string]*string, storageClass *string) (requestId string, err error) {
-	nParts, partSize := sizeToParts(size) // should be unreachable, and partsize i dont need anything to do with
+	nParts, partSize := sizeToParts(size)
 	etags := make([]*string, nParts)
 
 	if mpuId == "" {
-		params := &s3.CreateMultipartUploadInput{ // should be unreachable, assuming this is the one that is used
+		params := &s3.CreateMultipartUploadInput{
 			Bucket:       &s.bucket,
 			Key:          &to,
 			StorageClass: storageClass,
@@ -593,7 +589,7 @@ func (s *S3Backend) copyObjectMultipart(size int64, from string, to string, mpuI
 			params.ACL = &s.config.ACL
 		}
 
-		resp, err := s.CreateMultipartUpload(params) // should be unreachable, assuming this is the one that is used.
+		resp, err := s.CreateMultipartUpload(params)
 		if err != nil {
 			return "", mapAwsError(err)
 		}
@@ -640,6 +636,7 @@ func (s *S3Backend) copyObjectMultipart(size int64, from string, to string, mpuI
 
 func (s *S3Backend) CopyBlob(param *CopyBlobInput) (*CopyBlobOutput, error) {
 	metadataDirective := s3.MetadataDirectiveCopy
+	s3Log.Debugf("Entering CopyBlob")
 	if param.Metadata != nil {
 		metadataDirective = s3.MetadataDirectiveReplace
 	}
@@ -693,6 +690,7 @@ func (s *S3Backend) CopyBlob(param *CopyBlobInput) (*CopyBlobOutput, error) {
 		MetadataDirective: &metadataDirective,
 	}
 
+	s3Log.Debug("CopyBlob params")
 	s3Log.Debug(params)
 
 	if s.config.UseSSE {
@@ -725,53 +723,133 @@ func (s *S3Backend) CopyBlob(param *CopyBlobInput) (*CopyBlobOutput, error) {
 		s3Log.Errorf("CopyObject %v = %v", params, err)
 		return nil, mapAwsError(err)
 	}
-
+	s3Log.Debug("Exiting copyblob")
 	return &CopyBlobOutput{s.getRequestId(req)}, nil
 }
 
-func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
-	get := s3.GetObjectInput{
-		Bucket: &s.bucket,
-		Key:    &param.Key,
-	}
+func generateSignature(timeStampISO8601Format string, timestampYMD string, hashedPayload string, host string, filePath string, method string) string {
+	s3Log.Debug("Generating Signature")
+	// https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html
+	// must create the Canonical Request
+	var canonicalRequestSb strings.Builder
+	var stringToSignSb strings.Builder
+	canonicalRequestSb.WriteString(method + "\n" + // HTTP Method
+		filePath + "\n" + // canoniocalURI
+		"\n" + // canonicalQueryString: what comes after the "?" if none then just \n
+		// if for other functions they need more we will edit it then, but for just get it is empty
+		"host:" + host + "\n" + // Canonical Headers
+		strings.ToLower(amzContentShaHeader) + ":" + hashedPayload + "\n" + // this SHA is that of an empty string for 'GET'
+		strings.ToLower(amzDateHeader) + ":" + timeStampISO8601Format + "\n\n" +
+		// has to be double newline after last header because theres the newline after each header and then one after the group
+		"host;" + strings.ToLower(amzContentShaHeader) + ";" + strings.ToLower(amzDateHeader) + "\n" + // signed headers, alphabetically sorted
+		hashedPayload)
+	// create string to Sign
+	stringToSignSb.WriteString(aws4HmacSha256 + //algorithm
+		"\n" + timeStampISO8601Format + "\n" + timestampYMD + "/us-east-1/s3/aws4_request\n")
+	hash256 := sha256.New()
+	hash256.Write([]byte(canonicalRequestSb.String()))
+	stringToSignSb.WriteString(hex.EncodeToString(hash256.Sum(nil)))
+	//Create the signing Key
+	dateKey := getHMAC([]byte("AWS4"+os.Getenv("AWS_SECRET_ACCESS_KEY")), []byte(timestampYMD))
+	dateRegionKey := getHMAC(dateKey, []byte("us-east-1"))
+	dateRegionServiceKey := getHMAC(dateRegionKey, []byte("s3"))
+	signingKey := getHMAC(dateRegionServiceKey, []byte("aws4_request"))
+	// create the signature
+	signature := hex.EncodeToString(getHMAC(signingKey, []byte(stringToSignSb.String())))
+	return signature
+}
 
-	if s.config.SseC != "" {
-		get.SSECustomerAlgorithm = PString("AES256")
-		get.SSECustomerKey = &s.config.SseC
-		get.SSECustomerKeyMD5 = &s.config.SseCDigest
-	}
+func getHMAC(key []byte, data []byte) []byte {
+	hash := hmac.New(sha256.New, key)
+	hash.Write(data)
+	return hash.Sum(nil)
+}
 
-	if param.Start != 0 || param.Count != 0 {
-		var bytes string
-		if param.Count != 0 {
-			bytes = fmt.Sprintf("bytes=%v-%v", param.Start, param.Start+param.Count-1)
-		} else {
-			bytes = fmt.Sprintf("bytes=%v-", param.Start)
-		}
-		get.Range = &bytes
-	}
-	// TODO handle IfMatch
+// May need to modify once we get to `PUT`
+func createRequest(host string, method string, filePath string) *http.Request {
+	// Generate values to be re-used, the date, the hashed payload
+	timeStampISO8601Format := time.Now().Format("20060102T150405Z")
+	timestampYMD := time.Now().Format("20060102")
+	//payload := strings.NewReader("<file contents here>") // just keeping as this as generated by
+	payload := strings.NewReader("")
+	// Generate hash for payload (in our case currently empty)
+	hasher := sha256.New()
+	hasher.Write([]byte(""))
+	hashedPayload := hex.EncodeToString(hasher.Sum(nil)) // should be e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
 
-	req, resp := s.GetObjectRequest(&get)
-	err := req.Send()
+	// combine host and filepath to get full url string
+	req, err := http.NewRequest(method, "https://"+host+filePath, payload)
+
 	if err != nil {
-		return nil, mapAwsError(err)
+		fmt.Println(err)
 	}
+	signature := generateSignature(timeStampISO8601Format, timestampYMD, hashedPayload, host, filePath, method)
+	req.Header.Add(amzContentShaHeader, hashedPayload)
+	req.Header.Add(amzDateHeader, timeStampISO8601Format)
+	req.Header.Add("Authorization", aws4HmacSha256+" Credential="+os.Getenv("AWS_ACCESS_KEY_ID")+"/"+timestampYMD+
+		"/us-east-1/s3/aws4_request, SignedHeaders=host;"+strings.ToLower(amzContentShaHeader)+";"+strings.ToLower(amzDateHeader)+",Signature="+signature)
+	// Example of what the request header should look like below
+	// AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20130524/us-east-1/s3/aws4_request,SignedHeaders=host;range;x-amz-content-sha256;x-amz-date,Signature=f0e8bdb87c964420e857bd35b5d6ed310bd44f0170aba48dd91039c6036bdb41
+	return req
+}
 
+// s.bucket and param.Key combine nicely with good slash management. The final path we want looks something like;
+// /bucket/path/path2/.../file.txt
+// Example -> s.bucket: 1121045215484495542 and param.Key: jose/new,file.txt
+func returnURIPath(fullPath string) string {
+	pathToClean := strings.Split(fullPath, `/`)
+	cleanedPath := ""
+	for i := range pathToClean {
+		cleanedPath += "/" + url.QueryEscape(pathToClean[i])
+	}
+	// Must replace any `+`'s to %20 https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html
+	// the QueryEscape encodes the space to +
+	cleanedPath = strings.ReplaceAll(cleanedPath, "+", "%20")
+	return cleanedPath
+}
+
+func (s *S3Backend) sendRequest(method string, cleanedPath string) (string, time.Time, uint64, string, string, string, map[string]*string, io.ReadCloser) {
+	request := createRequest(os.Getenv("BUCKET_HOST"), method, cleanedPath)
+	res, e := s.httpClient.Do(request)
+	if e != nil {
+		s3Log.Debugf(e.Error())
+	}
+	// Build the information to be sent in the response
+	etag := res.Header.Get("ETag")
+	lastModified, _ := time.Parse("Mon, 02 Jan 2006 15:04:05 GMT", res.Header.Get("Last-Modified"))
+	size, _ := strconv.ParseUint(res.Header.Get("ContentLength"), 10, 64)
+	storageClass := res.Header.Get("x-amz-storage-class")
+	contentType := res.Header.Get("Content-Type")
+	amzRequest := res.Header.Get("x-amz-request-id") + ": " + res.Header.Get("x-amz-id-2")
+	amzMeta := make(map[string]*string)
+	for key, val := range res.Header {
+		if strings.HasPrefix("x-amz-meta-", key) {
+			for _, value := range val {
+				amzMeta[key] = &value
+				s3Log.Debug("Key:" + key + "\nValue:" + value)
+			}
+		}
+	}
+	return etag, lastModified, size, storageClass, contentType, amzRequest, amzMeta, io.NopCloser(res.Body)
+}
+func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
+	cleanedPath := returnURIPath(s.bucket + param.Key)
+	etag, lastModified, size, storageClass, contentType, amzRequest, amzMeta, body := s.sendRequest("GET", cleanedPath)
+	s3Log.Debugf("Exiting GetBlob")
 	return &GetBlobOutput{
 		HeadBlobOutput: HeadBlobOutput{
 			BlobItemOutput: BlobItemOutput{
-				Key:          &param.Key,
-				ETag:         resp.ETag,
-				LastModified: resp.LastModified,
-				Size:         uint64(*resp.ContentLength),
-				StorageClass: resp.StorageClass,
+				Key:          &param.Key, // Does not need to be encoded
+				ETag:         &etag,
+				LastModified: &lastModified,
+				Size:         size,
+				StorageClass: &storageClass,
 			},
-			ContentType: resp.ContentType,
-			Metadata:    metadataToLower(resp.Metadata),
+			ContentType: &contentType,
+			Metadata:    metadataToLower(amzMeta),
 		},
-		Body:      resp.Body,
-		RequestId: s.getRequestId(req),
+		Body:      body, // Without the NopCloser the calling function will not be able to use this
+		RequestId: amzRequest,
 	}, nil
 }
 
@@ -791,6 +869,7 @@ func getDate(resp *http.Response) *time.Time {
 func (s *S3Backend) PutBlob(param *PutBlobInput) (*PutBlobOutput, error) {
 	s3Log.Debugf("Entering PutBlob")
 	storageClass := s.config.StorageClass
+	s3Log.Debug("Entering putblob")
 	if param.Size != nil && *param.Size < 128*1024 && storageClass == "STANDARD_IA" {
 		storageClass = "STANDARD"
 	}
@@ -833,9 +912,7 @@ func (s *S3Backend) PutBlob(param *PutBlobInput) (*PutBlobOutput, error) {
 	}, nil
 }
 
-// reached from file.go
 func (s *S3Backend) MultipartBlobBegin(param *MultipartBlobBeginInput) (*MultipartBlobCommitInput, error) {
-	// references API then
 	mpu := s3.CreateMultipartUploadInput{
 		Bucket:       &s.bucket,
 		Key:          &param.Key,
@@ -858,10 +935,9 @@ func (s *S3Backend) MultipartBlobBegin(param *MultipartBlobBeginInput) (*Multipa
 		mpu.ACL = &s.config.ACL
 	}
 
-	// again reference API
 	resp, err := s.CreateMultipartUpload(&mpu)
 	if err != nil {
-		s3Log.Errorf("Jose: CreateMultipartUpload %v = %v", param.Key, err) // this is the err i get?
+		s3Log.Errorf("CreateMultipartUpload %v = %v", param.Key, err)
 		return nil, mapAwsError(err)
 	}
 
