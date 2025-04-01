@@ -56,10 +56,10 @@ type S3Backend struct {
 	gcs        bool
 	v2Signer   bool
 }
-const amzContentShaHeader = "X-Amz-Content-Sha256"
-const amzDateHeader       = "X-Amz-Date"
-const aws4HmacSha256      = "AWS4-HMAC-SHA256"
 
+const amzContentShaHeader = "X-Amz-Content-Sha256"
+const amzDateHeader = "X-Amz-Date"
+const aws4HmacSha256 = "AWS4-HMAC-SHA256"
 
 func NewS3(bucket string, flags *FlagStorage, config *S3Config) (*S3Backend, error) {
 	awsConfig, err := config.ToAwsConfig(flags)
@@ -733,21 +733,19 @@ func generateSignature(timeStampISO8601Format string, timestampYMD string, hashe
 	// must create the Canonical Request
 	var canonicalRequestSb strings.Builder
 	var stringToSignSb strings.Builder
-	canonicalRequestSb.WriteString(method + "\n")   // HTTP Method
-	canonicalRequestSb.WriteString(filePath + "\n") // canoniocalURI
-	canonicalRequestSb.WriteString("\n")            // canonicalQueryString: what comes after the "?" if none then just \n, if for other functions they need more
-	// we will edit it then, but for just get it is empty
-	canonicalRequestSb.WriteString("host:" + host + "\n" + // Canonical Headers
-		strings.ToLower(amzContentShaHeader) + ":" + hashedPayload + "\n" + // this SHA is that of an empty string, at least for GET
-		strings.ToLower(amzDateHeader) + ":" + timeStampISO8601Format + "\n\n")
-	// has to be double newline after last header because theres the newline after each header and then one after the group
-	canonicalRequestSb.WriteString("host;" + strings.ToLower(amzContentShaHeader) + ";" +
-				       strings.ToLower(amzDateHeader) + "\n") // signed headers, alphabetically sorted
-	canonicalRequestSb.WriteString(hashedPayload)
+	canonicalRequestSb.WriteString(method + "\n" + // HTTP Method
+		filePath + "\n" + // canoniocalURI
+		"\n" + // canonicalQueryString: what comes after the "?" if none then just \n
+		// if for other functions they need more we will edit it then, but for just get it is empty
+		"host:" + host + "\n" + // Canonical Headers
+		strings.ToLower(amzContentShaHeader) + ":" + hashedPayload + "\n" + // this SHA is that of an empty string for 'GET'
+		strings.ToLower(amzDateHeader) + ":" + timeStampISO8601Format + "\n\n" +
+		// has to be double newline after last header because theres the newline after each header and then one after the group
+		"host;" + strings.ToLower(amzContentShaHeader) + ";" + strings.ToLower(amzDateHeader) + "\n" + // signed headers, alphabetically sorted
+		hashedPayload)
 	// create string to Sign
-	stringToSignSb.WriteString(aws4HmacSha256) //algorithm
-	stringToSignSb.WriteString("\n" + timeStampISO8601Format)
-	stringToSignSb.WriteString("\n" + timestampYMD + "/us-east-1/s3/aws4_request\n")
+	stringToSignSb.WriteString(aws4HmacSha256 + //algorithm
+		"\n" + timeStampISO8601Format + "\n" + timestampYMD + "/us-east-1/s3/aws4_request\n")
 	hash256 := sha256.New()
 	hash256.Write([]byte(canonicalRequestSb.String()))
 	stringToSignSb.WriteString(hex.EncodeToString(hash256.Sum(nil)))
@@ -788,8 +786,8 @@ func createRequest(host string, method string, filePath string) *http.Request {
 	signature := generateSignature(timeStampISO8601Format, timestampYMD, hashedPayload, host, filePath, method)
 	req.Header.Add(amzContentShaHeader, hashedPayload)
 	req.Header.Add(amzDateHeader, timeStampISO8601Format)
-	req.Header.Add("Authorization", aws4HmacSha256 + " Credential="+os.Getenv("AWS_ACCESS_KEY_ID")+"/"+timestampYMD+
-		"/us-east-1/s3/aws4_request, SignedHeaders=host;"+ strings.ToLower(amzContentShaHeader) + ";" + strings.ToLower(amzDateHeader) + ",Signature="+signature)
+	req.Header.Add("Authorization", aws4HmacSha256+" Credential="+os.Getenv("AWS_ACCESS_KEY_ID")+"/"+timestampYMD+
+		"/us-east-1/s3/aws4_request, SignedHeaders=host;"+strings.ToLower(amzContentShaHeader)+";"+strings.ToLower(amzDateHeader)+",Signature="+signature)
 	// Example of what the request header should look like below
 	// AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20130524/us-east-1/s3/aws4_request,SignedHeaders=host;range;x-amz-content-sha256;x-amz-date,Signature=f0e8bdb87c964420e857bd35b5d6ed310bd44f0170aba48dd91039c6036bdb41
 	return req
