@@ -516,7 +516,7 @@ func (s *S3Backend) mpuCopyPart(from string, to string, mpuId string, bytes stri
 	return
 }
 
-func sizeToParts(size int64) (int, int64) { // this shouldnt matter, since this mpu shouldnt get called.
+func sizeToParts(size int64) (int, int64) {
 	const MAX_S3_MPU_SIZE int64 = 5 * 1024 * 1024 * 1024 * 1024
 	if size > MAX_S3_MPU_SIZE {
 		panic(fmt.Sprintf("object size: %v exceeds maximum S3 MPU size: %v", size, MAX_S3_MPU_SIZE))
@@ -561,15 +561,13 @@ func (s *S3Backend) mpuCopyParts(size int64, from string, to string, mpuId strin
 	sem.V(MAX_CONCURRENCY)
 }
 
-// This shouldnt get reached, the only reference to `copyObjectMultip` was commented out (other than the test)
-// Assuming that this backend_s3.go is the one that is used.
 func (s *S3Backend) copyObjectMultipart(size int64, from string, to string, mpuId string,
 	srcEtag *string, metadata map[string]*string, storageClass *string) (requestId string, err error) {
-	nParts, partSize := sizeToParts(size) // should be unreachable, and partsize i dont need anything to do with
+	nParts, partSize := sizeToParts(size)
 	etags := make([]*string, nParts)
 
 	if mpuId == "" {
-		params := &s3.CreateMultipartUploadInput{ // should be unreachable, assuming this is the one that is used
+		params := &s3.CreateMultipartUploadInput{
 			Bucket:       &s.bucket,
 			Key:          &to,
 			StorageClass: storageClass,
@@ -592,7 +590,7 @@ func (s *S3Backend) copyObjectMultipart(size int64, from string, to string, mpuI
 			params.ACL = &s.config.ACL
 		}
 
-		resp, err := s.CreateMultipartUpload(params) // should be unreachable, assuming this is the one that is used.
+		resp, err := s.CreateMultipartUpload(params)
 		if err != nil {
 			return "", mapAwsError(err)
 		}
@@ -759,7 +757,6 @@ func generateSignature(timeStampISO8601Format string, timestampYMD string, sha25
 			// Create signed headers
 			"host;" + strings.ToLower(amzContentShaHeader) + ";" + strings.ToLower(amzDateHeader) + "\n" + sha256HashedPayload)
 	}
-
 	// create string to Sign
 	stringToSignSb.WriteString(aws4HmacSha256 + // Algorithm
 		"\n" + timeStampISO8601Format + "\n" + timestampYMD + "/us-east-1/s3/aws4_request\n")
@@ -936,6 +933,7 @@ func hashAndLengthReadSeeker(rs io.ReadSeeker) (string, string, string, error) {
 	return strconv.FormatInt(contentLength, 10), hex.EncodeToString(md5), hex.EncodeToString(sha256), nil
 }
 func (s *S3Backend) PutBlob(param *PutBlobInput) (*PutBlobOutput, error) {
+	s3Log.Debugf("Entering PutBlob")
 	storageClass := s.config.StorageClass
 	s3Log.Debug("Entering putblob")
 	if param.Size != nil && *param.Size < 128*1024 && storageClass == "STANDARD_IA" {
@@ -1008,9 +1006,7 @@ func (s *S3Backend) PutBlob(param *PutBlobInput) (*PutBlobOutput, error) {
 	}, nil
 }
 
-// reached from file.go
 func (s *S3Backend) MultipartBlobBegin(param *MultipartBlobBeginInput) (*MultipartBlobCommitInput, error) {
-	// references API then
 	mpu := s3.CreateMultipartUploadInput{
 		Bucket:       &s.bucket,
 		Key:          &param.Key,
@@ -1033,7 +1029,6 @@ func (s *S3Backend) MultipartBlobBegin(param *MultipartBlobBeginInput) (*Multipa
 		mpu.ACL = &s.config.ACL
 	}
 
-	// again reference API
 	resp, err := s.CreateMultipartUpload(&mpu)
 	if err != nil {
 		s3Log.Errorf("CreateMultipartUpload %v = %v", param.Key, err)
