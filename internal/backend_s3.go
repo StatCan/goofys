@@ -52,11 +52,15 @@ type S3Backend struct {
 	flags      *FlagStorage
 	config     *S3Config
 	sseType    string
-	httpClient *http.Client // do this so we can pass around? init below in NewS3
+	httpClient *http.Client
 	aws        bool
 	gcs        bool
 	v2Signer   bool
 }
+
+const amzContentShaHeader = "X-Amz-Content-Sha256"
+const amzDateHeader = "X-Amz-Date"
+const aws4HmacSha256 = "AWS4-HMAC-SHA256"
 
 func NewS3(bucket string, flags *FlagStorage, config *S3Config) (*S3Backend, error) {
 	awsConfig, err := config.ToAwsConfig(flags)
@@ -368,27 +372,7 @@ func (s *S3Backend) getRequestId(r *request.Request) string {
 func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 	s3Log.Debugf("Entering HeadBlob")
 	cleanedPath := returnURIPath(s.bucket + param.Key)
-	request := createRequest(os.Getenv("BUCKET_HOST"), "HEAD", cleanedPath, nil, "")
-	res, e := s.httpClient.Do(request)
-	if e != nil {
-		fmt.Println(e)
-
-	}
-	// Build the information to be sent in the response
-	etag := res.Header.Get("ETag")
-	lastModified, _ := time.Parse("Mon, 02 Jan 2006 15:04:05 GMT", res.Header.Get("Last-Modified"))
-	size, _ := strconv.ParseUint(res.Header.Get("ContentLength"), 10, 64)
-	storageClass := res.Header.Get("x-amz-storage-class")
-	contentType := res.Header.Get("Content-Type")
-	amzRequest := res.Header.Get("x-amz-request-id") + ": " + res.Header.Get("x-amz-id-2")
-	amzMeta := make(map[string]*string)
-	for key, val := range res.Header {
-		if strings.HasPrefix("x-amz-meta-", key) {
-			for _, value := range val {
-				amzMeta[key] = &value
-			}
-		}
-	}
+	etag, lastModified, size, storageClass, contentType, amzRequest, amzMeta, _ := s.sendRequest("HEAD", cleanedPath)
 
 	s3Log.Debugf("Exiting Headblob")
 	return &HeadBlobOutput{
@@ -460,12 +444,7 @@ func (s *S3Backend) ListBlobs(param *ListBlobsInput) (*ListBlobsOutput, error) {
 func (s *S3Backend) DeleteBlob(param *DeleteBlobInput) (*DeleteBlobOutput, error) {
 	s3Log.Debugf("Entering DeleteBlob")
 	cleanedPath := returnURIPath(s.bucket + param.Key)
-	request := createRequest(os.Getenv("BUCKET_HOST"), "DELETE", cleanedPath, nil, "")
-	res, e := s.httpClient.Do(request)
-	if e != nil {
-		s3Log.Debugf(e.Error())
-	}
-	amzRequest := res.Header.Get("x-amz-request-id") + ": " + res.Header.Get("x-amz-id-2")
+	_, _, _, _, _, amzRequest, _, _ := s.sendRequest("DELETE", cleanedPath)
 	s3Log.Debugf("Exiting DeleteBlob")
 	return &DeleteBlobOutput{amzRequest}, nil
 }
@@ -755,44 +734,46 @@ func generateSignature(timeStampISO8601Format string, timestampYMD string, sha25
 	s3Log.Debug("Generating Signature")
 	// https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html
 	// must create the Canonical Request
-	canonicalRequest := method + "\n"   // HTTP Method
-	canonicalRequest += filePath + "\n" // canoniocalURI
-	canonicalRequest += "\n"            // canonicalQueryString: what comes after the "?" if none then just \n, if for other functions they need more
-	// we will edit it then, but for just get it is empty
-	// test without the content--length and contend-md5 headers for put
+	var canonicalRequestSb strings.Builder
+	var stringToSignSb strings.Builder
+	canonicalRequestSb.WriteString(method + "\n" + // HTTP Method
+		filePath + "\n" + // canoniocalURI
+		"\n") // canonicalQueryString: what comes after the "?" if none then just \n
+	// Add the Canonical Headers
 	if method == "PUT" {
-		canonicalRequest += "content-length:" + contentLength + "\n" + // Canonical Headers
+		// if for other functions they need more we will edit it then, but for just get it is empty
+		// test without the content--length and contend-md5 headers for put
+		canonicalRequestSb.WriteString("content-length:" + contentLength + "\n" + // Canonical Headers, must end with 2 newlines
 			"content-md5:" + md5HashedPayload + "\n" +
 			"host:" + host + "\n" +
-			"x-amz-content-sha256:" + sha256HashedPayload + "\n" + // this SHA is that of an empty string, at least for GET
-			"x-amz-date:" + timeStampISO8601Format + "\n" +
-			"x-amz-storage-class:" + sc + "\n\n"
-		canonicalRequest += "content-length;content-md5;host;x-amz-content-sha256;x-amz-date;x-amz-storage-class\n" // signed headers
+			strings.ToLower(amzContentShaHeader) + ":" + sha256HashedPayload + "\n" + // this SHA is that of an empty string, at least for GET
+			strings.ToLower(amzDateHeader) + ":" + timeStampISO8601Format + "\n" +
+			"x-amz-storage-class:" + sc + "\n\n" +
+			// Create signed headers
+			"content-length;content-md5;host;" + strings.ToLower(amzContentShaHeader) + ";" + strings.ToLower(amzDateHeader) +
+			";x-amz-storage-class\n" + sha256HashedPayload)
 	} else {
-		canonicalRequest += "host:" + host + "\n" + // Canonical Headers
-			"x-amz-content-sha256:" + sha256HashedPayload + "\n" + // this SHA is that of an empty string, at least for GET
-			"x-amz-date:" + timeStampISO8601Format + "\n\n"
-		// has to be double newline after last header because theres the newline after each header and then one after the group
-		canonicalRequest += "host;x-amz-content-sha256;x-amz-date\n" // signed headers, alphabetically sorted
+		canonicalRequestSb.WriteString("host:" + host + "\n" + // Canonical Headers, must end with 2 newlines
+			strings.ToLower(amzContentShaHeader) + ":" + sha256HashedPayload + "\n" + // this SHA is that of an empty string, at least for GET
+			strings.ToLower(amzDateHeader) + ":" + timeStampISO8601Format + "\n\n" +
+			// Create signed headers
+			"host;" + strings.ToLower(amzContentShaHeader) + ";" + strings.ToLower(amzDateHeader) + "\n" + sha256HashedPayload)
 	}
 
-	//canonicalRequest += "host;x-amz-content-sha256;x-amz-date\n" // signed headers, alphabetically sorted
-	canonicalRequest += sha256HashedPayload
 	// create string to Sign
-	stringToSign := "AWS4-HMAC-SHA256" //algorithm
-	stringToSign += "\n" + timeStampISO8601Format
-	stringToSign += "\n" + timestampYMD + "/us-east-1/s3/aws4_request\n"
+	stringToSignSb.WriteString(aws4HmacSha256 + // Algorithm
+		"\n" + timeStampISO8601Format + "\n" + timestampYMD + "/us-east-1/s3/aws4_request\n")
 	hash256 := sha256.New()
-	hash256.Write([]byte(canonicalRequest))
-	stringToSign += hex.EncodeToString(hash256.Sum(nil))
+	hash256.Write([]byte(canonicalRequestSb.String()))
+	stringToSignSb.WriteString(hex.EncodeToString(hash256.Sum(nil)))
 	//Create the signing Key
 	dateKey := getHMAC([]byte("AWS4"+os.Getenv("AWS_SECRET_ACCESS_KEY")), []byte(timestampYMD))
 	dateRegionKey := getHMAC(dateKey, []byte("us-east-1"))
 	dateRegionServiceKey := getHMAC(dateRegionKey, []byte("s3"))
 	signingKey := getHMAC(dateRegionServiceKey, []byte("aws4_request"))
 	// create the signature
-	signature := hex.EncodeToString(getHMAC(signingKey, []byte(stringToSign)))
-	s3Log.Debugf("Canonical Request:" + canonicalRequest)
+	signature := hex.EncodeToString(getHMAC(signingKey, []byte(stringToSignSb.String())))
+	s3Log.Debugf("Canonical Request:" + canonicalRequestSb.String())
 	return signature
 }
 
@@ -871,9 +852,9 @@ func returnURIPath(fullPath string) string {
 	cleanedPath = strings.ReplaceAll(cleanedPath, "+", "%20")
 	return cleanedPath
 }
-func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
-	cleanedPath := returnURIPath(s.bucket + param.Key)
-	request := createRequest(os.Getenv("BUCKET_HOST"), "GET", cleanedPath, nil, "")
+
+func (s *S3Backend) sendRequest(method string, cleanedPath string) (string, time.Time, uint64, string, string, string, map[string]*string, io.ReadCloser) {
+	request := createRequest(os.Getenv("BUCKET_HOST"), method, cleanedPath, nil, "")
 	res, e := s.httpClient.Do(request)
 	if e != nil {
 		s3Log.Debugf(e.Error())
@@ -894,6 +875,11 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 			}
 		}
 	}
+	return etag, lastModified, size, storageClass, contentType, amzRequest, amzMeta, io.NopCloser(res.Body)
+}
+func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
+	cleanedPath := returnURIPath(s.bucket + param.Key)
+	etag, lastModified, size, storageClass, contentType, amzRequest, amzMeta, body := s.sendRequest("GET", cleanedPath)
 	s3Log.Debugf("Exiting GetBlob")
 	return &GetBlobOutput{
 		HeadBlobOutput: HeadBlobOutput{
@@ -907,7 +893,7 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 			ContentType: &contentType,
 			Metadata:    metadataToLower(amzMeta),
 		},
-		Body:      io.NopCloser(res.Body), // Without the NopCloser the calling function will not be able to use this
+		Body:      io.NopCloser(body), // Without the NopCloser the calling function will not be able to use this
 		RequestId: amzRequest,
 	}, nil
 }
