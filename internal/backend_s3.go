@@ -822,15 +822,15 @@ func createRequest(host string, method string, filePath string, body io.ReadSeek
 		s3Log.Debug("Sha256Hashed:" + sha256hashedPayload)
 		// change the below to accomodate new headers
 		req.Header.Add("Authorization", "AWS4-HMAC-SHA256 Credential="+os.Getenv("AWS_ACCESS_KEY_ID")+"/"+timestampYMD+
-			"/us-east-1/s3/aws4_request, SignedHeaders=content-length;host;x-amz-content-sha256;x-amz-date,Signature="+signature)
+			"/us-east-1/s3/aws4_request, SignedHeaders=content-length;host;"+strings.ToLower(amzContentShaHeader)+";"+strings.ToLower(amzDateHeader)+"Signature="+signature)
 		// trying without content-md5
 		//"/us-east-1/s3/aws4_request, SignedHeaders=content-length;content-md5;host;x-amz-content-sha256;x-amz-date,Signature="+signature)
 	} else {
 		req.Header.Add("Authorization", "AWS4-HMAC-SHA256 Credential="+os.Getenv("AWS_ACCESS_KEY_ID")+"/"+timestampYMD+
-			"/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date,Signature="+signature)
+			"/us-east-1/s3/aws4_request, SignedHeaders=host;"+strings.ToLower(amzContentShaHeader)+";"+strings.ToLower(amzDateHeader)+",Signature="+signature)
 	}
-	req.Header.Add("X-Amz-Content-Sha256", sha256hashedPayload)
-	req.Header.Add("X-Amz-Date", timeStampISO8601Format)
+	req.Header.Add(amzContentShaHeader, sha256hashedPayload)
+	req.Header.Add(amzDateHeader, timeStampISO8601Format)
 
 	// Example of what the request header should look like below
 	// AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20130524/us-east-1/s3/aws4_request,SignedHeaders=host;range;x-amz-content-sha256;x-amz-date,Signature=f0e8bdb87c964420e857bd35b5d6ed310bd44f0170aba48dd91039c6036bdb41
@@ -893,7 +893,7 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 			ContentType: &contentType,
 			Metadata:    metadataToLower(amzMeta),
 		},
-		Body:      io.NopCloser(body), // Without the NopCloser the calling function will not be able to use this
+		Body:      body, // Without the NopCloser the calling function will not be able to use this
 		RequestId: amzRequest,
 	}, nil
 }
@@ -1036,7 +1036,7 @@ func (s *S3Backend) MultipartBlobBegin(param *MultipartBlobBeginInput) (*Multipa
 	// again reference API
 	resp, err := s.CreateMultipartUpload(&mpu)
 	if err != nil {
-		s3Log.Errorf("CreateMultipartUpload %v = %v", param.Key, err) // this is the err i get?
+		s3Log.Errorf("CreateMultipartUpload %v = %v", param.Key, err)
 		return nil, mapAwsError(err)
 	}
 
