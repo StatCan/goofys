@@ -770,7 +770,7 @@ func generateSignature(timeStampISO8601Format string, timestampYMD string, sha25
 	signingKey := getHMAC(dateRegionServiceKey, []byte("aws4_request"))
 	// create the signature
 	signature := hex.EncodeToString(getHMAC(signingKey, []byte(stringToSignSb.String())))
-	s3Log.Debugf("Canonical Request:" + canonicalRequestSb.String())
+	s3Log.Debug("Canonical Request:" + canonicalRequestSb.String())
 	return signature
 }
 
