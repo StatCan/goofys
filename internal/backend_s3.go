@@ -371,23 +371,50 @@ func (s *S3Backend) getRequestId(r *request.Request) string {
 
 func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 	s3Log.Debugf("Entering HeadBlob")
-	cleanedPath := returnURIPath(s.bucket + param.Key)
-	etag, lastModified, size, storageClass, contentType, amzRequest, amzMeta, _ := s.sendRequest("HEAD", cleanedPath)
+	head := s3.HeadObjectInput{Bucket: &s.bucket,
+		Key: &param.Key,
+	}
+	if s.config.SseC != "" {
+		head.SSECustomerAlgorithm = PString("AES256")
+		head.SSECustomerKey = &s.config.SseC
+		head.SSECustomerKeyMD5 = &s.config.SseCDigest
+	}
 
-	s3Log.Debugf("Exiting Headblob")
+	req, resp := s.S3.HeadObjectRequest(&head)
+	err := req.Send()
+	if err != nil {
+		return nil, mapAwsError(err)
+	}
 	return &HeadBlobOutput{
 		BlobItemOutput: BlobItemOutput{
 			Key:          &param.Key,
-			ETag:         &etag,
-			LastModified: &lastModified,
-			Size:         size,
-			StorageClass: &storageClass,
+			ETag:         resp.ETag,
+			LastModified: resp.LastModified,
+			Size:         uint64(*resp.ContentLength),
+			StorageClass: resp.StorageClass,
 		},
-		ContentType: &contentType,
-		Metadata:    metadataToLower(amzMeta),
+		ContentType: resp.ContentType,
+		Metadata:    metadataToLower(resp.Metadata),
 		IsDirBlob:   strings.HasSuffix(param.Key, "/"),
-		RequestId:   amzRequest,
+		RequestId:   s.getRequestId(req),
 	}, nil
+	// cleanedPath := returnURIPath(s.bucket + param.Key)
+	// etag, lastModified, size, storageClass, contentType, amzRequest, amzMeta, _ := s.sendRequest("HEAD", cleanedPath)
+
+	// s3Log.Debugf("Exiting Headblob")
+	// return &HeadBlobOutput{
+	// 	BlobItemOutput: BlobItemOutput{
+	// 		Key:          &param.Key,
+	// 		ETag:         &etag,
+	// 		LastModified: &lastModified,
+	// 		Size:         size,
+	// 		StorageClass: &storageClass,
+	// 	},
+	// 	ContentType: &contentType,
+	// 	Metadata:    metadataToLower(amzMeta),
+	// 	IsDirBlob:   strings.HasSuffix(param.Key, "/"),
+	// 	RequestId:   amzRequest,
+	// }, nil
 }
 
 func (s *S3Backend) ListBlobs(param *ListBlobsInput) (*ListBlobsOutput, error) {
