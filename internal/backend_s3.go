@@ -369,54 +369,29 @@ func (s *S3Backend) getRequestId(r *request.Request) string {
 		r.HTTPResponse.Header.Get("x-amz-id-2")
 }
 
+// so with old headblob we can read jose/invalid,/any,file.txt
+// but with new headblob we can read jose/invalid,file.txt but not jose/invalid,/goodfile.txt
 func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 	s3Log.Debugf("Entering HeadBlob")
-	head := s3.HeadObjectInput{Bucket: &s.bucket,
-		Key: &param.Key,
-	}
-	if s.config.SseC != "" {
-		head.SSECustomerAlgorithm = PString("AES256")
-		head.SSECustomerKey = &s.config.SseC
-		head.SSECustomerKeyMD5 = &s.config.SseCDigest
-	}
-
-	req, resp := s.S3.HeadObjectRequest(&head)
-	err := req.Send()
-	if err != nil {
-		return nil, mapAwsError(err)
-	}
+	cleanedPath := returnURIPath(s.bucket + param.Key)
+	etag, lastModified, size, storageClass, contentType, amzRequest, amzMeta, _ := s.sendRequest("HEAD", cleanedPath)
+	s3Log.Debugf("Exiting Headblob")
 	return &HeadBlobOutput{
 		BlobItemOutput: BlobItemOutput{
 			Key:          &param.Key,
-			ETag:         resp.ETag,
-			LastModified: resp.LastModified,
-			Size:         uint64(*resp.ContentLength),
-			StorageClass: resp.StorageClass,
+			ETag:         &etag,
+			LastModified: &lastModified,
+			Size:         size,
+			StorageClass: &storageClass,
 		},
-		ContentType: resp.ContentType,
-		Metadata:    metadataToLower(resp.Metadata),
+		ContentType: &contentType,
+		Metadata:    metadataToLower(amzMeta),
 		IsDirBlob:   strings.HasSuffix(param.Key, "/"),
-		RequestId:   s.getRequestId(req),
+		RequestId:   amzRequest,
 	}, nil
-	// cleanedPath := returnURIPath(s.bucket + param.Key)
-	// etag, lastModified, size, storageClass, contentType, amzRequest, amzMeta, _ := s.sendRequest("HEAD", cleanedPath)
-
-	// s3Log.Debugf("Exiting Headblob")
-	// return &HeadBlobOutput{
-	// 	BlobItemOutput: BlobItemOutput{
-	// 		Key:          &param.Key,
-	// 		ETag:         &etag,
-	// 		LastModified: &lastModified,
-	// 		Size:         size,
-	// 		StorageClass: &storageClass,
-	// 	},
-	// 	ContentType: &contentType,
-	// 	Metadata:    metadataToLower(amzMeta),
-	// 	IsDirBlob:   strings.HasSuffix(param.Key, "/"),
-	// 	RequestId:   amzRequest,
-	// }, nil
 }
 
+// Listblob hasnt failed for us on signature calc, something else is wrong? maybe silently failing?
 func (s *S3Backend) ListBlobs(param *ListBlobsInput) (*ListBlobsOutput, error) {
 	var maxKeys *int64
 	s3Log.Debugf("ListBlobs")
@@ -899,6 +874,13 @@ func (s *S3Backend) sendRequest(method string, cleanedPath string) (string, time
 			}
 		}
 	}
+	// Print out everything in the request
+	//HEAD /1121045215484495542/jose/valid/.ipynb_checkpoints/invalid,file-checkpoint.txt HTTP/1.1
+	// Host: fld9.s3.cloud.statcan.ca
+	// User-Agent: goofys/0.42.0- aws-sdk-go/1.44.37 (go1.20.7; linux; amd64)
+	// Authorization: AWS4-HMAC-SHA256 Credential=/20250408/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=def43c4ec7d222ef33d917132a3cc0a1d9a90bd6a02c631e3d9f9f5162cc2973
+	// X-Amz-Content-Sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+	// X-Amz-Date: 20250408T145520Z
 	return etag, lastModified, size, storageClass, contentType, amzRequest, amzMeta, io.NopCloser(res.Body)
 }
 func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
