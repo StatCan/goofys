@@ -370,6 +370,42 @@ func (s *S3Backend) getRequestId(r *request.Request) string {
 
 func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 	s3Log.Debugf("Entering HeadBlob")
+	// Temporarily revert to old implementation
+	// This is so we can test the `listblob` implemetation, without needing to navigate there first.
+	// Once we fix being able to read without navigation first we can address not being able to open the file
+	/*
+		f = open("filers/jose/valid/invalid,file.txt", "r")
+		print(f.read())
+	*/
+	head := s3.HeadObjectInput{Bucket: &s.bucket,
+		Key: &param.Key,
+	}
+	if s.config.SseC != "" {
+		head.SSECustomerAlgorithm = PString("AES256")
+		head.SSECustomerKey = &s.config.SseC
+		head.SSECustomerKeyMD5 = &s.config.SseCDigest
+	}
+
+	req, resp := s.S3.HeadObjectRequest(&head)
+	err := req.Send()
+	if err != nil {
+		return nil, mapAwsError(err)
+	}
+	return &HeadBlobOutput{
+		BlobItemOutput: BlobItemOutput{
+			Key:          &param.Key,
+			ETag:         resp.ETag,
+			LastModified: resp.LastModified,
+			Size:         uint64(*resp.ContentLength),
+			StorageClass: resp.StorageClass,
+		},
+		ContentType: resp.ContentType,
+		Metadata:    metadataToLower(resp.Metadata),
+		IsDirBlob:   strings.HasSuffix(param.Key, "/"),
+		RequestId:   s.getRequestId(req),
+	}, nil
+	// New implementation below, this breaks and when trying to read a file on initial load (before navigating)
+	// Will convert a "folder" into a "file" making it impossible to navigate to without restarting
 	cleanedPath := returnURIPath(s.bucket + param.Key)
 	etag, lastModified, size, storageClass, contentType, amzRequest, amzMeta, _ := s.sendRequest("HEAD", cleanedPath)
 
@@ -389,6 +425,15 @@ func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 	}, nil
 }
 
+// Investigating listblobs
+// This doesn't work completely on special paths from the get go without going to the dir first
+// Right from notebook startup I am able to python read a file in a valid dir / file
+// But from nb startup if i try with filers/jose/invalid,/valid.txt it fails unless i navigate there first.
+/* the following fails, but filers/jose/valid/jose-test.txt works,, note that cant open in browsre
+f = open("filers/jose/valid/invalid,file.txt", "r")
+print(f.read())
+*/
+// https://jirab.statcan.ca/browse/BTIS-912?focusedId=3394904&page=com.atlassian.jira.plugin.system.issuetabpanels:comment-tabpanel#comment-3394904
 func (s *S3Backend) ListBlobs(param *ListBlobsInput) (*ListBlobsOutput, error) {
 	var maxKeys *int64
 	s3Log.Debugf("ListBlobs")
@@ -396,6 +441,8 @@ func (s *S3Backend) ListBlobs(param *ListBlobsInput) (*ListBlobsOutput, error) {
 		maxKeys = aws.Int64(int64(*param.MaxKeys))
 	}
 
+	// I want to avoid messing with ListObjectsV2 if I can, since the request it makes is fine and works
+	// Should hopefully just be able to modify the response to allow for special characters (like comma)
 	resp, reqId, err := s.ListObjectsV2(&s3.ListObjectsV2Input{
 		Bucket:            &s.bucket,
 		Prefix:            param.Prefix,
@@ -410,14 +457,16 @@ func (s *S3Backend) ListBlobs(param *ListBlobsInput) (*ListBlobsOutput, error) {
 	}
 
 	prefixes := make([]BlobPrefixOutput, 0)
-	items := make([]BlobItemOutput, 0)
+	items := make([]BlobItemOutput, 0) // does these items need to be uriencoded?
 
 	for _, p := range resp.CommonPrefixes {
 		prefixes = append(prefixes, BlobPrefixOutput{Prefix: p.Prefix})
 	}
+	// returnURIPath
 	for _, i := range resp.Contents {
+		escapedKey := returnURIPath(*i.Key)
 		items = append(items, BlobItemOutput{
-			Key:          i.Key,
+			Key:          &escapedKey,
 			ETag:         i.ETag,
 			LastModified: i.LastModified,
 			Size:         uint64(*i.Size),
@@ -634,6 +683,8 @@ func (s *S3Backend) copyObjectMultipart(size int64, from string, to string, mpuI
 	return
 }
 
+// Ignore this, this doesnt work currently and is not supported
+// Would need to change how this is called
 func (s *S3Backend) CopyBlob(param *CopyBlobInput) (*CopyBlobOutput, error) {
 	metadataDirective := s3.MetadataDirectiveCopy
 	s3Log.Debugf("Entering CopyBlob")
@@ -810,6 +861,11 @@ func returnURIPath(fullPath string) string {
 
 func (s *S3Backend) sendRequest(method string, cleanedPath string) (string, time.Time, uint64, string, string, string, map[string]*string, io.ReadCloser) {
 	request := createRequest(os.Getenv("BUCKET_HOST"), method, cleanedPath)
+	// Debug request headers
+	s3Log.Debug("Host:" + request.Header.Get("Host"))
+	s3Log.Debug("User-Agent:" + request.Header.Get("User-Agent"))
+	s3Log.Debug("Authorization:" + request.Header.Get("Authorization"))
+	s3Log.Debug(amzContentShaHeader + request.Header.Get(amzContentShaHeader))
 	res, e := s.httpClient.Do(request)
 	if e != nil {
 		s3Log.Debugf(e.Error())
@@ -830,6 +886,10 @@ func (s *S3Backend) sendRequest(method string, cleanedPath string) (string, time
 			}
 		}
 	}
+	// Debug Response
+	s3Log.Debug("Status Code:" + strconv.Itoa(res.StatusCode))
+	s3Log.Debug("ContentType:" + contentType)
+	s3Log.Debug("ContentLength:" + res.Header.Get("ContentLength"))
 	return etag, lastModified, size, storageClass, contentType, amzRequest, amzMeta, io.NopCloser(res.Body)
 }
 func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
