@@ -381,36 +381,43 @@ func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 	// leading to permission denied, since old headblob isnt able to handle special characters
 	// So we need to fix our `fixed` headblob converting.
 
-	// head := s3.HeadObjectInput{Bucket: &s.bucket,
-	// 	Key: &param.Key,
-	// }
-	// if s.config.SseC != "" {
-	// 	head.SSECustomerAlgorithm = PString("AES256")
-	// 	head.SSECustomerKey = &s.config.SseC
-	// 	head.SSECustomerKeyMD5 = &s.config.SseCDigest
-	// }
+	head := s3.HeadObjectInput{Bucket: &s.bucket,
+		Key: &param.Key,
+	}
+	if s.config.SseC != "" {
+		head.SSECustomerAlgorithm = PString("AES256")
+		head.SSECustomerKey = &s.config.SseC
+		head.SSECustomerKeyMD5 = &s.config.SseCDigest
+	}
 
-	// req, resp := s.S3.HeadObjectRequest(&head)
-	// err := req.Send()
-	// if err != nil {
-	// 	return nil, mapAwsError(err)
-	// }
-	// s3Log.Debugf("Exiting Headblob")
-	// s3Log.Debug("Param.Key:" + param.Key + "\nIsDirBlob:" + strconv.FormatBool(strings.HasSuffix(param.Key, "/")))
-	// s3Log.Debugf("Resp.Metadata:%v", resp.Metadata)
-	// return &HeadBlobOutput{
-	// 	BlobItemOutput: BlobItemOutput{
-	// 		Key:          &param.Key,
-	// 		ETag:         resp.ETag,
-	// 		LastModified: resp.LastModified,
-	// 		Size:         uint64(*resp.ContentLength),
-	// 		StorageClass: resp.StorageClass,
-	// 	},
-	// 	ContentType: resp.ContentType,
-	// 	Metadata:    metadataToLower(resp.Metadata),
-	// 	IsDirBlob:   strings.HasSuffix(param.Key, "/"),
-	// 	RequestId:   s.getRequestId(req),
-	// }, nil
+	req, resp := s.S3.HeadObjectRequest(&head)
+	err := req.Send()
+	if err != nil {
+		return nil, mapAwsError(err)
+	}
+	s3Log.Debug("Param.Key:" + param.Key + "\nIsDirBlob:" + strconv.FormatBool(strings.HasSuffix(param.Key, "/")))
+	s3Log.Debugf("Resp.Metadata below")
+	for key, value := range resp.Metadata {
+		if value != nil {
+			s3Log.Debugf("%s: %s", key, *value)
+		} else {
+			s3Log.Debugf("%s: <nil>\n", key)
+		}
+	}
+	s3Log.Debugf("Exiting Headblob")
+	return &HeadBlobOutput{
+		BlobItemOutput: BlobItemOutput{
+			Key:          &param.Key,
+			ETag:         resp.ETag,
+			LastModified: resp.LastModified,
+			Size:         uint64(*resp.ContentLength),
+			StorageClass: resp.StorageClass,
+		},
+		ContentType: resp.ContentType,
+		Metadata:    metadataToLower(resp.Metadata),
+		IsDirBlob:   strings.HasSuffix(param.Key, "/"),
+		RequestId:   s.getRequestId(req),
+	}, nil
 
 	// New implementation below, this breaks and when trying to read a file on initial load (before navigating)
 	// Will convert a "folder" into a "file" making it impossible to navigate to without restarting
@@ -420,12 +427,19 @@ func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 
 	// Why is param.key here just `jose` when above its jose/valid/jose-test.txt
 	s3Log.Debug("Param.Key:" + param.Key + "\nIsDirBlob:" + strconv.FormatBool(strings.HasSuffix(param.Key, "/")))
-	blah := "jose/valid/jose-test.txt"
-	//s3Log.Debugf("Resp.Metadata:%v", amzMeta)
+	//blah := "jose/valid/jose-test.txt" // hardcoding didnt do anything
+	s3Log.Debugf("Resp.Metadata below")
+	for key, value := range amzMeta {
+		if value != nil {
+			s3Log.Debugf("%s: %s", key, *value)
+		} else {
+			s3Log.Debugf("%s: <nil>\n", key)
+		}
+	}
 	s3Log.Debugf("Exiting Headblob")
 	return &HeadBlobOutput{
 		BlobItemOutput: BlobItemOutput{
-			Key:          &blah,
+			Key:          &param.Key,
 			ETag:         &etag,
 			LastModified: &lastModified,
 			Size:         size,
@@ -434,7 +448,8 @@ func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 		ContentType: &contentType,
 		Metadata:    metadataToLower(amzMeta),
 		IsDirBlob:   strings.HasSuffix(param.Key, "/"), // am curious if this is the one thats messing with everything
-		RequestId:   amzRequest,
+		// I dont think it is, on the old headblob this still functions as it does
+		RequestId: amzRequest,
 	}, nil
 }
 
