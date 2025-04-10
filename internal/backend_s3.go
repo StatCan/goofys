@@ -325,7 +325,7 @@ func (s *S3Backend) ListObjectsV2(params *s3.ListObjectsV2Input) (*s3.ListObject
 		if err != nil {
 			return nil, "", err
 		}
-		s3Log.Debugf("ListObjectsV2: objs %v, err %v", objs, err)
+		//s3Log.Debugf("ListObjectsV2: objs %v, err %v", objs, err)// same as in ListBlob resp
 		count := int64(len(objs.Contents))
 		v2Objs := s3.ListObjectsV2Output{
 			CommonPrefixes:        objs.CommonPrefixes,
@@ -436,12 +436,12 @@ print(f.read())
 // https://jirab.statcan.ca/browse/BTIS-912?focusedId=3394904&page=com.atlassian.jira.plugin.system.issuetabpanels:comment-tabpanel#comment-3394904
 func (s *S3Backend) ListBlobs(param *ListBlobsInput) (*ListBlobsOutput, error) {
 	var maxKeys *int64
-	s3Log.Debugf("ListBlobs")
+	s3Log.Debugf("Entering ListBlobs")
 	if param.MaxKeys != nil {
 		maxKeys = aws.Int64(int64(*param.MaxKeys))
 	}
 
-	// I want to avoid messing with ListObjectsV2 if I can, since the request it makes is fine and works
+	// I want to avoid messing with ListObjectsV2 if I can, since the request it makes is fine and works, as in you can `list`
 	// Should hopefully just be able to modify the response to allow for special characters (like comma)
 	resp, reqId, err := s.ListObjectsV2(&s3.ListObjectsV2Input{
 		Bucket:            &s.bucket,
@@ -451,22 +451,26 @@ func (s *S3Backend) ListBlobs(param *ListBlobsInput) (*ListBlobsOutput, error) {
 		StartAfter:        param.StartAfter,
 		ContinuationToken: param.ContinuationToken,
 	})
+	//ListObjectsV2 prints out the params as well as the objs. `Objs` is very similar to the ListBlobs: resp printed below
+	// ListObjects obj just has a `Marker` that ends up as the `ContinuationToken`
 	s3Log.Debugf("ListBlobs: resp %v, reqid %v, err %v", resp, reqId, err)
 	if err != nil {
 		return nil, mapAwsError(err)
 	}
 
-	prefixes := make([]BlobPrefixOutput, 0)
-	items := make([]BlobItemOutput, 0) // does these items need to be uriencoded?
+	prefixes := make([]BlobPrefixOutput, 0) // i dont think this has to be encoded?
+	items := make([]BlobItemOutput, 0)      // does these items need to be uriencoded?
 
 	for _, p := range resp.CommonPrefixes {
 		prefixes = append(prefixes, BlobPrefixOutput{Prefix: p.Prefix})
 	}
 	// returnURIPath
 	for _, i := range resp.Contents {
-		escapedKey := returnURIPath(*i.Key)
+		encodedKey := returnURIPath(*i.Key) // attempting this did not work, it ends up not displaying or being ls'able
+		s3Log.Debug("Encoded Key:" + encodedKey)
+		// I dont think we should be encoding at this point in the process anyways?
 		items = append(items, BlobItemOutput{
-			Key:          &escapedKey,
+			Key:          i.Key,
 			ETag:         i.ETag,
 			LastModified: i.LastModified,
 			Size:         uint64(*i.Size),
