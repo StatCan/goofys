@@ -377,39 +377,44 @@ func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 		f = open("filers/jose/valid/invalid,file.txt", "r")
 		print(f.read())
 	*/
-	head := s3.HeadObjectInput{Bucket: &s.bucket,
-		Key: &param.Key,
-	}
-	if s.config.SseC != "" {
-		head.SSECustomerAlgorithm = PString("AES256")
-		head.SSECustomerKey = &s.config.SseC
-		head.SSECustomerKeyMD5 = &s.config.SseCDigest
-	}
+	// The issue here with using old headblob is that  when you try to python read a file from the home/jovyan it enters here
+	// leading to permission denied, since old headblob isnt able to handle special characters
+	// So we need to fix our `fixed` headblob converting.
 
-	req, resp := s.S3.HeadObjectRequest(&head)
-	err := req.Send()
-	if err != nil {
-		return nil, mapAwsError(err)
-	}
-	return &HeadBlobOutput{
-		BlobItemOutput: BlobItemOutput{
-			Key:          &param.Key,
-			ETag:         resp.ETag,
-			LastModified: resp.LastModified,
-			Size:         uint64(*resp.ContentLength),
-			StorageClass: resp.StorageClass,
-		},
-		ContentType: resp.ContentType,
-		Metadata:    metadataToLower(resp.Metadata),
-		IsDirBlob:   strings.HasSuffix(param.Key, "/"),
-		RequestId:   s.getRequestId(req),
-	}, nil
+	// head := s3.HeadObjectInput{Bucket: &s.bucket,
+	// 	Key: &param.Key,
+	// }
+	// if s.config.SseC != "" {
+	// 	head.SSECustomerAlgorithm = PString("AES256")
+	// 	head.SSECustomerKey = &s.config.SseC
+	// 	head.SSECustomerKeyMD5 = &s.config.SseCDigest
+	// }
+
+	// req, resp := s.S3.HeadObjectRequest(&head)
+	// err := req.Send()
+	// if err != nil {
+	// 	return nil, mapAwsError(err)
+	// }
+	// return &HeadBlobOutput{
+	// 	BlobItemOutput: BlobItemOutput{
+	// 		Key:          &param.Key,
+	// 		ETag:         resp.ETag,
+	// 		LastModified: resp.LastModified,
+	// 		Size:         uint64(*resp.ContentLength),
+	// 		StorageClass: resp.StorageClass,
+	// 	},
+	// 	ContentType: resp.ContentType,
+	// 	Metadata:    metadataToLower(resp.Metadata),
+	// 	IsDirBlob:   strings.HasSuffix(param.Key, "/"),
+	// 	RequestId:   s.getRequestId(req),
+	// }, nil
 	// New implementation below, this breaks and when trying to read a file on initial load (before navigating)
 	// Will convert a "folder" into a "file" making it impossible to navigate to without restarting
 	cleanedPath := returnURIPath(s.bucket + param.Key)
 	etag, lastModified, size, storageClass, contentType, amzRequest, amzMeta, _ := s.sendRequest("HEAD", cleanedPath)
 
 	s3Log.Debugf("Exiting Headblob")
+	s3Log.Debug("Param.Key:" + param.Key + "\nIsDirBlob:" + strconv.FormatBool(strings.HasSuffix(param.Key, "/")))
 	return &HeadBlobOutput{
 		BlobItemOutput: BlobItemOutput{
 			Key:          &param.Key,
@@ -469,6 +474,8 @@ func (s *S3Backend) ListBlobs(param *ListBlobsInput) (*ListBlobsOutput, error) {
 		encodedKey := returnURIPath(*i.Key) // attempting this did not work, it ends up not displaying or being ls'able
 		s3Log.Debug("Encoded Key:" + encodedKey)
 		// I dont think we should be encoding at this point in the process anyways?
+		// This is not called when just doing a read from the top / not found
+		// This only gets called ONCE you enter the `filers`
 		items = append(items, BlobItemOutput{
 			Key:          i.Key,
 			ETag:         i.ETag,
