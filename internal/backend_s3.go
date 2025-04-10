@@ -381,46 +381,51 @@ func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 	// leading to permission denied, since old headblob isnt able to handle special characters
 	// So we need to fix our `fixed` headblob converting.
 
-	head := s3.HeadObjectInput{Bucket: &s.bucket,
-		Key: &param.Key,
-	}
-	if s.config.SseC != "" {
-		head.SSECustomerAlgorithm = PString("AES256")
-		head.SSECustomerKey = &s.config.SseC
-		head.SSECustomerKeyMD5 = &s.config.SseCDigest
-	}
+	// head := s3.HeadObjectInput{Bucket: &s.bucket,
+	// 	Key: &param.Key,
+	// }
+	// if s.config.SseC != "" {
+	// 	head.SSECustomerAlgorithm = PString("AES256")
+	// 	head.SSECustomerKey = &s.config.SseC
+	// 	head.SSECustomerKeyMD5 = &s.config.SseCDigest
+	// }
 
-	req, resp := s.S3.HeadObjectRequest(&head)
-	err := req.Send()
-	if err != nil {
-		return nil, mapAwsError(err)
-	}
-	s3Log.Debugf("Exiting Headblob")
-	s3Log.Debug("Param.Key:" + param.Key + "\nIsDirBlob:" + strconv.FormatBool(strings.HasSuffix(param.Key, "/")))
-	s3Log.Debugf("Resp.Metadata:%v", resp.Metadata)
-	return &HeadBlobOutput{
-		BlobItemOutput: BlobItemOutput{
-			Key:          &param.Key,
-			ETag:         resp.ETag,
-			LastModified: resp.LastModified,
-			Size:         uint64(*resp.ContentLength),
-			StorageClass: resp.StorageClass,
-		},
-		ContentType: resp.ContentType,
-		Metadata:    metadataToLower(resp.Metadata),
-		IsDirBlob:   strings.HasSuffix(param.Key, "/"),
-		RequestId:   s.getRequestId(req),
-	}, nil
+	// req, resp := s.S3.HeadObjectRequest(&head)
+	// err := req.Send()
+	// if err != nil {
+	// 	return nil, mapAwsError(err)
+	// }
+	// s3Log.Debugf("Exiting Headblob")
+	// s3Log.Debug("Param.Key:" + param.Key + "\nIsDirBlob:" + strconv.FormatBool(strings.HasSuffix(param.Key, "/")))
+	// s3Log.Debugf("Resp.Metadata:%v", resp.Metadata)
+	// return &HeadBlobOutput{
+	// 	BlobItemOutput: BlobItemOutput{
+	// 		Key:          &param.Key,
+	// 		ETag:         resp.ETag,
+	// 		LastModified: resp.LastModified,
+	// 		Size:         uint64(*resp.ContentLength),
+	// 		StorageClass: resp.StorageClass,
+	// 	},
+	// 	ContentType: resp.ContentType,
+	// 	Metadata:    metadataToLower(resp.Metadata),
+	// 	IsDirBlob:   strings.HasSuffix(param.Key, "/"),
+	// 	RequestId:   s.getRequestId(req),
+	// }, nil
+
 	// New implementation below, this breaks and when trying to read a file on initial load (before navigating)
 	// Will convert a "folder" into a "file" making it impossible to navigate to without restarting
+	// So the question here is WHY does this not end up going into listblob?
 	cleanedPath := returnURIPath(s.bucket + param.Key)
 	etag, lastModified, size, storageClass, contentType, amzRequest, amzMeta, _ := s.sendRequest("HEAD", cleanedPath)
 
-	s3Log.Debugf("Exiting Headblob")
+	// Why is param.key here just `jose` when above its jose/valid/jose-test.txt
 	s3Log.Debug("Param.Key:" + param.Key + "\nIsDirBlob:" + strconv.FormatBool(strings.HasSuffix(param.Key, "/")))
+	blah := "jose/valid/jose-test.txt"
+	//s3Log.Debugf("Resp.Metadata:%v", amzMeta)
+	s3Log.Debugf("Exiting Headblob")
 	return &HeadBlobOutput{
 		BlobItemOutput: BlobItemOutput{
-			Key:          &param.Key,
+			Key:          &blah,
 			ETag:         &etag,
 			LastModified: &lastModified,
 			Size:         size,
