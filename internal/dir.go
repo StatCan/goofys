@@ -1078,6 +1078,7 @@ func (parent *Inode) Rename(from string, newParent *Inode, to string) (err error
 	}
 
 	if fromIsDir && !toIsDir {
+		s3Log.Debug("Inside dir.go/rename before headblob call")
 		_, err = fromCloud.HeadBlob(&HeadBlobInput{
 			Key: toFullName,
 		})
@@ -1292,6 +1293,7 @@ func (parent *Inode) LookUpInodeNotDir(name string, c chan HeadBlobOutput, errc 
 	cloud, key := parent.cloud()
 	key = appendChildName(key, name)
 	params := &HeadBlobInput{Key: key}
+	s3Log.Debug("Inside dir.go/LookupInodeNotDir before headblob")
 	resp, err := cloud.HeadBlob(params)
 	if err != nil {
 		errc <- mapAwsError(err)

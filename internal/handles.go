@@ -344,6 +344,7 @@ func (inode *Inode) fillXattr() (err error) {
 
 		cloud, key := inode.cloud()
 		params := &HeadBlobInput{Key: key}
+		s3Log.Debug("Inside handles.go/fillxattr before headblob")
 		resp, err := cloud.HeadBlob(params)
 		if err != nil {
 			err = mapAwsError(err)
