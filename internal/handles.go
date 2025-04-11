@@ -169,8 +169,10 @@ func (inode *Inode) cloud() (cloud StorageBackend, path string) {
 	if inode.dir == nil {
 		path = *inode.Name
 		dir = inode.Parent
+		s3Log.Debug("cloud: Inode dir nil")
 	} else {
 		dir = inode
+		s3Log.Debugf("cloud: inode.dir not nil val:%v", dir)
 	}
 
 	for p := dir; p != nil; p = p.Parent {
@@ -198,16 +200,20 @@ func (inode *Inode) cloud() (cloud StorageBackend, path string) {
 
 		if path == "" {
 			path = *p.Name
+			s3Log.Debugf("Path in for loop:%v", path)
 		} else if p.Parent != nil {
 			// don't prepend if I am already the root node
 			path = *p.Name + "/" + path
+			s3Log.Debugf("Not prepending if i am already root node path value:%v", path)
 		}
 	}
 
 	if path == "" {
 		path = strings.TrimRight(prefix, "/")
+		s3Log.Debugf("Path out near end of cloud loop:%v", path)
 	} else {
 		path = prefix + path
+		s3Log.Debugf("Path at ELSE out near end of cloud loop:%v", path)
 	}
 	return
 }

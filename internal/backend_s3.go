@@ -368,7 +368,14 @@ func (s *S3Backend) getRequestId(r *request.Request) string {
 	return r.HTTPResponse.Header.Get("x-amz-request-id") + ": " +
 		r.HTTPResponse.Header.Get("x-amz-id-2")
 }
-
+func (m *HeadBlobInput) cloneHead() *HeadBlobInput {
+	if m == nil {
+		return nil
+	}
+	return &HeadBlobInput{
+		Key: m.Key,
+	}
+}
 func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 	s3Log.Debugf("Entering HeadBlob")
 	// Temporarily revert to old implementation
@@ -424,11 +431,14 @@ func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 	// New implementation below, this breaks and when trying to read a file on initial load (before navigating)
 	// Will convert a "folder" into a "file" making it impossible to navigate to without restarting
 	// So the question here is WHY does this not end up going into listblob?
-	cleanedPath := returnURIPath(s.bucket + param.Key)
+	clonedParam := param.cloneHead()
+	cleanedPath := returnURIPath(s.bucket + clonedParam.Key)
+	// try cloning param.key and then using that from there on.
 	etag, lastModified, size, storageClass, contentType, amzRequest, amzMeta, _ := s.sendRequest("HEAD", cleanedPath)
 
 	// Why is param.key here just `jose` when above its jose/valid/jose-test.txt
-	s3Log.Debug("Param.Key:" + param.Key + "\nIsDirBlob:" + strconv.FormatBool(strings.HasSuffix(param.Key, "/")))
+	s3Log.Debug("ClonedParam.Key:" + clonedParam.Key + "\nIsDirBlob:" + strconv.FormatBool(strings.HasSuffix(clonedParam.Key, "/")))
+	s3Log.Debug("ORIGINAL PARAM.Key:" + param.Key + "\nIsDirBlob:" + strconv.FormatBool(strings.HasSuffix(param.Key, "/")))
 	//blah := "jose/valid/jose-test.txt" // hardcoding didnt do anything
 	s3Log.Debugf("Resp.Metadata below")
 	for key, value := range amzMeta {
@@ -441,7 +451,7 @@ func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 	s3Log.Debugf("Exiting Headblob")
 	return &HeadBlobOutput{
 		BlobItemOutput: BlobItemOutput{
-			Key:          &param.Key,
+			Key:          &clonedParam.Key, // try making cloned value
 			ETag:         &etag,
 			LastModified: &lastModified,
 			Size:         size,
@@ -449,7 +459,7 @@ func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 		},
 		ContentType: &contentType,
 		Metadata:    metadataToLower(amzMeta),
-		IsDirBlob:   strings.HasSuffix(param.Key, "/"), // am curious if this is the one thats messing with everything
+		IsDirBlob:   strings.HasSuffix(clonedParam.Key, "/"), // am curious if this is the one thats messing with everything
 		// I dont think it is, on the old headblob this still functions as it does
 		RequestId: amzRequest,
 	}, nil
