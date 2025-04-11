@@ -176,6 +176,7 @@ func (inode *Inode) cloud() (cloud StorageBackend, path string) {
 	}
 
 	for p := dir; p != nil; p = p.Parent {
+		s3Log.Debug("Entering for loop")
 		if p.dir.cloud != nil {
 			cloud = p.dir.cloud
 			// the error backend produces a mount.err file
@@ -197,7 +198,8 @@ func (inode *Inode) cloud() (cloud StorageBackend, path string) {
 			}
 			break
 		}
-
+		// with new headblob this 'path' ends up as just the toppest which is wrong.
+		// none of this ends up getting called, none of these s3logdebug get shown
 		if path == "" {
 			path = *p.Name
 			s3Log.Debugf("Path in for loop:%v", path)
@@ -206,6 +208,7 @@ func (inode *Inode) cloud() (cloud StorageBackend, path string) {
 			path = *p.Name + "/" + path
 			s3Log.Debugf("Not prepending if i am already root node path value:%v", path)
 		}
+		s3Log.Debug("Exiting the for loop")
 	}
 
 	if path == "" {

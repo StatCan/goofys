@@ -378,6 +378,7 @@ func (m *HeadBlobInput) cloneHead() *HeadBlobInput {
 }
 func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 	s3Log.Debugf("Entering HeadBlob")
+	s3Log.Debug("ORIGINAL PARAM.Key:" + param.Key + "\nIsDirBlob:" + strconv.FormatBool(strings.HasSuffix(param.Key, "/")))
 	// Temporarily revert to old implementation
 	// This is so we can test the `listblob` implemetation, without needing to navigate there first.
 	// Once we fix being able to read without navigation first we can address not being able to open the file
@@ -438,7 +439,7 @@ func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 
 	// Why is param.key here just `jose` when above its jose/valid/jose-test.txt
 	s3Log.Debug("ClonedParam.Key:" + clonedParam.Key + "\nIsDirBlob:" + strconv.FormatBool(strings.HasSuffix(clonedParam.Key, "/")))
-	s3Log.Debug("ORIGINAL PARAM.Key:" + param.Key + "\nIsDirBlob:" + strconv.FormatBool(strings.HasSuffix(param.Key, "/")))
+
 	//blah := "jose/valid/jose-test.txt" // hardcoding didnt do anything
 	s3Log.Debugf("Resp.Metadata below")
 	for key, value := range amzMeta {

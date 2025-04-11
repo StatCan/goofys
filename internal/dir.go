@@ -1290,11 +1290,13 @@ func (parent *Inode) readDirFromCache(offset fuseops.DirOffset) (en *DirHandleEn
 }
 
 func (parent *Inode) LookUpInodeNotDir(name string, c chan HeadBlobOutput, errc chan error) {
-	cloud, key := parent.cloud() // check inside this parent.cloud what happens
+	cloud, key := parent.cloud() // check inside this parent.cloud what happens, this sets the key to be off
 	s3Log.Debugf("1st pre append Key:%s and name:%s", key, name)
+	// for whatever reason with our new getblob the key thats generated here is just `jose`
 	key = appendChildName(key, name)
 	s3Log.Debugf("Key:%s and name:%s", key, name)
 	params := &HeadBlobInput{Key: key}
+	params = &HeadBlobInput{Key: "jose/valid/jose-test.txt"} // can try hardcoding here
 	s3Log.Debug("Inside dir.go/LookupInodeNotDir before headblob")
 	resp, err := cloud.HeadBlob(params)
 	if err != nil {
