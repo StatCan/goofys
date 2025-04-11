@@ -178,11 +178,13 @@ func (inode *Inode) cloud() (cloud StorageBackend, path string) {
 	for p := dir; p != nil; p = p.Parent {
 		s3Log.Debug("Entering for loop")
 		if p.dir.cloud != nil {
+			s3Log.Debug("p.dir.cloud != nil")
 			cloud = p.dir.cloud
 			// the error backend produces a mount.err file
 			// at the root and is not aware of prefix
 			_, isErr := cloud.(StorageBackendInitError)
 			if !isErr {
+				s3Log.Debug("!isErr first reached")
 				// we call init here instead of
 				// relying on the wrapper to call init
 				// because we want to return the right
@@ -190,12 +192,15 @@ func (inode *Inode) cloud() (cloud StorageBackend, path string) {
 				if c, ok := cloud.(*StorageBackendInitWrapper); ok {
 					err := c.Init("")
 					isErr = err != nil
+					s3Log.Debug("isErr got reset to nnil")
 				}
 			}
 
 			if !isErr {
 				prefix = p.dir.mountPrefix
+				s3Log.Debug("!isErr reached, prefix:" + prefix)
 			}
+			s3Log.Debug("Breaking out of for loop, p.dir.cloud not nil")
 			break
 		}
 		// with new headblob this 'path' ends up as just the toppest which is wrong.
@@ -208,7 +213,7 @@ func (inode *Inode) cloud() (cloud StorageBackend, path string) {
 			path = *p.Name + "/" + path
 			s3Log.Debugf("Not prepending if i am already root node path value:%v", path)
 		}
-		s3Log.Debug("Exiting the for loop")
+		s3Log.Debug("Exiting the for loop") // doesnt get here
 	}
 
 	if path == "" {

@@ -1296,7 +1296,8 @@ func (parent *Inode) LookUpInodeNotDir(name string, c chan HeadBlobOutput, errc 
 	key = appendChildName(key, name)
 	s3Log.Debugf("Key:%s and name:%s", key, name)
 	params := &HeadBlobInput{Key: key}
-	params = &HeadBlobInput{Key: "jose/valid/jose-test.txt"} // can try hardcoding here
+	// params = &HeadBlobInput{Key: "jose/valid/jose-test.txt"} // can try hardcoding here
+	// this hardcode doesnt fix it even just trying to just access it
 	s3Log.Debug("Inside dir.go/LookupInodeNotDir before headblob")
 	resp, err := cloud.HeadBlob(params)
 	if err != nil {
