@@ -184,7 +184,7 @@ func (inode *Inode) cloud() (cloud StorageBackend, path string) {
 			// at the root and is not aware of prefix
 			_, isErr := cloud.(StorageBackendInitError)
 			if !isErr {
-				s3Log.Debug("!isErr first reached")
+				s3Log.Debug("!isErr first reached") // this is reached
 				// we call init here instead of
 				// relying on the wrapper to call init
 				// because we want to return the right
@@ -192,15 +192,15 @@ func (inode *Inode) cloud() (cloud StorageBackend, path string) {
 				if c, ok := cloud.(*StorageBackendInitWrapper); ok {
 					err := c.Init("")
 					isErr = err != nil
-					s3Log.Debug("isErr got reset to nnil")
+					s3Log.Debug("isErr got reset to nnil") // not reached
 				}
 			}
 
 			if !isErr {
 				prefix = p.dir.mountPrefix
-				s3Log.Debug("!isErr reached, prefix:" + prefix)
+				s3Log.Debug("!isErr reached, prefix:" + prefix) // this gets reached with empty prefix
 			}
-			s3Log.Debug("Breaking out of for loop, p.dir.cloud not nil")
+			s3Log.Debug("Breaking out of for loop, p.dir.cloud not nil") // this gets reached
 			break
 		}
 		// with new headblob this 'path' ends up as just the toppest which is wrong.
@@ -218,7 +218,7 @@ func (inode *Inode) cloud() (cloud StorageBackend, path string) {
 
 	if path == "" {
 		path = strings.TrimRight(prefix, "/")
-		s3Log.Debugf("Path out near end of cloud loop:%v", path)
+		s3Log.Debugf("Path out near end of cloud loop:%v", path) // this is hit
 	} else {
 		path = prefix + path
 		s3Log.Debugf("Path at ELSE out near end of cloud loop:%v", path)
