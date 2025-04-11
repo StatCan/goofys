@@ -394,6 +394,7 @@ func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 	req, resp := s.S3.HeadObjectRequest(&head)
 	err := req.Send()
 	if err != nil {
+		s3Log.Debug("leaving headblob error")
 		return nil, mapAwsError(err)
 	}
 	s3Log.Debug("Param.Key:" + param.Key + "\nIsDirBlob:" + strconv.FormatBool(strings.HasSuffix(param.Key, "/")))

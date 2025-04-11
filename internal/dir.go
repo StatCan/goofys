@@ -1296,10 +1296,11 @@ func (parent *Inode) LookUpInodeNotDir(name string, c chan HeadBlobOutput, errc 
 	s3Log.Debug("Inside dir.go/LookupInodeNotDir before headblob")
 	resp, err := cloud.HeadBlob(params)
 	if err != nil {
+		s3Log.Debug("inside lookupinodenotdir error")
 		errc <- mapAwsError(err)
 		return
 	}
-
+	s3Log.Debug("Exiting lookupinodenotdir")
 	s3Log.Debug(resp)
 	c <- *resp
 }
@@ -1338,9 +1339,10 @@ func (parent *Inode) LookUpInodeMaybeDir(name string, fullName string) (inode *I
 	if cloud == nil {
 		panic("s3 disabled")
 	}
-
+	s3Log.Debug("Inside lookupinodemaybedir top")
 	go parent.LookUpInodeNotDir(name, objectChan, errObjectChan)
 	if !cloud.Capabilities().DirBlob && !parent.fs.flags.Cheap {
+		s3Log.Debug("Inside lookupinodemaybe dir !cheap")
 		go parent.LookUpInodeNotDir(name+"/", objectChan, errDirBlobChan)
 		if !parent.fs.flags.ExplicitDir {
 			errDirChan = make(chan error, 1)
@@ -1412,6 +1414,7 @@ func (parent *Inode) LookUpInodeMaybeDir(name string, fullName string) (inode *I
 		switch checking {
 		case 2:
 			if parent.fs.flags.Cheap {
+				s3Log.Debug("Inside lookupinodemaybe dir cheap")
 				go parent.LookUpInodeNotDir(name+"/", objectChan, errDirBlobChan)
 			}
 		case 1:
