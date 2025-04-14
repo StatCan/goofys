@@ -222,6 +222,7 @@ func (inode *Inode) cloud() (cloud StorageBackend, path string) {
 	} else {
 		path = prefix + path
 		s3Log.Debugf("Path at ELSE out near end of cloud loop:%v", path)
+		// in a successful headblob it reaches here with jose/valid/jose-test.txt
 	}
 	return
 }
