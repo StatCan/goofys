@@ -381,7 +381,6 @@ func (m *HeadBlobInput) cloneHead() *HeadBlobInput {
 // It just hard stops after the top directory, `jose` and doesnt go to `jose/` etc
 func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 	s3Log.Debugf("Entering HeadBlob")
-	s3Log.Debug("ORIGINAL PARAM.Key:" + param.Key + "\nIsDirBlob:" + strconv.FormatBool(strings.HasSuffix(param.Key, "/")))
 	// Temporarily revert to old implementation
 	// This is so we can test the `listblob` implemetation, without needing to navigate there first.
 	// Once we fix being able to read without navigation first we can address not being able to open the file
@@ -396,7 +395,7 @@ func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 	blah := s.bucket + param.Key
 	bblah2 := os.Getenv("BUCKET_HOST")
 	s3Log.Debug("New Key:" + blah + " and host:" + bblah2)
-	head := s3.HeadObjectInput{Bucket: &bblah2,
+	head := s3.HeadObjectInput{Bucket: &s.bucket,
 		Key: &blah, // try using this
 	}
 	if s.config.SseC != "" {
