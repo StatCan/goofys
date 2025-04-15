@@ -15,6 +15,8 @@
 package internal
 
 import (
+	"os"
+
 	. "github.com/StatCan/goofys/api/common"
 
 	"fmt"
@@ -358,9 +360,15 @@ func (s *S3Backend) getRequestId(r *request.Request) string {
 }
 
 func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
+	blah := s.bucket + param.Key
+	bblah2 := os.Getenv("BUCKET_HOST")
+	s3Log.Debug("New Key:" + blah + " and host:" + bblah2)
 	head := s3.HeadObjectInput{Bucket: &s.bucket,
-		Key: &param.Key,
+		Key: &blah, // try using this
 	}
+	// head := s3.HeadObjectInput{Bucket: &s.bucket,
+	// 	Key: &param.Key,
+	// }
 	if s.config.SseC != "" {
 		head.SSECustomerAlgorithm = PString("AES256")
 		head.SSECustomerKey = &s.config.SseC
@@ -374,7 +382,7 @@ func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 	}
 	return &HeadBlobOutput{
 		BlobItemOutput: BlobItemOutput{
-			Key:          &param.Key,
+			Key:          &param.Key, // does this need to change?
 			ETag:         resp.ETag,
 			LastModified: resp.LastModified,
 			Size:         uint64(*resp.ContentLength),
