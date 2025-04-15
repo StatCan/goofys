@@ -393,7 +393,7 @@ func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 	// leading to permission denied, since old headblob isnt able to handle special characters
 	// So we need to fix our `fixed` headblob converting.
 
-	blah := s.bucket + "/" + param.Key
+	blah := s.bucket + param.Key
 	bblah2 := os.Getenv("BUCKET_HOST")
 	s3Log.Debug("New Key:" + blah + " and host:" + bblah2)
 	head := s3.HeadObjectInput{Bucket: &bblah2,
