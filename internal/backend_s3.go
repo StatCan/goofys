@@ -395,6 +395,7 @@ func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 
 	blah := s.bucket + "/" + param.Key
 	bblah2 := os.Getenv("BUCKET_HOST")
+	s3Log.Debug("New Key:" + blah + " and host:" + bblah2)
 	head := s3.HeadObjectInput{Bucket: &bblah2,
 		Key: &blah, // try using this
 	}
@@ -424,7 +425,8 @@ func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 	s3Log.Debugf("Exiting Headblob")
 	return &HeadBlobOutput{
 		BlobItemOutput: BlobItemOutput{
-			Key:          &param.Key,
+			//Key:          &param.Key,
+			Key:          &blah, // does this need to be deep copied
 			ETag:         resp.ETag,
 			LastModified: resp.LastModified,
 			Size:         uint64(*resp.ContentLength),
