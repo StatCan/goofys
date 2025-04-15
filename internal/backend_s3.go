@@ -393,46 +393,48 @@ func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 	// leading to permission denied, since old headblob isnt able to handle special characters
 	// So we need to fix our `fixed` headblob converting.
 
-	// head := s3.HeadObjectInput{Bucket: &s.bucket,
-	// 	Key: &param.Key,
-	// }
-	// if s.config.SseC != "" {
-	// 	head.SSECustomerAlgorithm = PString("AES256")
-	// 	head.SSECustomerKey = &s.config.SseC
-	// 	head.SSECustomerKeyMD5 = &s.config.SseCDigest
-	// }
+	blah := s.bucket + "/" + param.Key
+	bblah2 := os.Getenv("BUCKET_HOST")
+	head := s3.HeadObjectInput{Bucket: &bblah2,
+		Key: &blah, // try using this
+	}
+	if s.config.SseC != "" {
+		head.SSECustomerAlgorithm = PString("AES256")
+		head.SSECustomerKey = &s.config.SseC
+		head.SSECustomerKeyMD5 = &s.config.SseCDigest
+	}
 
-	// req, resp := s.S3.HeadObjectRequest(&head)
-	// err := req.Send()
-	// if err != nil {
-	// 	s3Log.Debug("leaving headblob error")
-	// 	return nil, mapAwsError(err)
-	// }
-	// s3Log.Debug("Param.Key:" + param.Key + "\nIsDirBlob:" + strconv.FormatBool(strings.HasSuffix(param.Key, "/")))
-	// s3Log.Debugf("Etag:%v, LastModified:%v, Size:%v, SC:%v, ContentType:%v, RequestId:%v",
-	// 	resp.ETag, resp.LastModified, uint64(*resp.ContentLength), resp.StorageClass, resp.ContentType, s.getRequestId(req))
-	// s3Log.Debugf("Resp.Metadata below")
-	// for key, value := range resp.Metadata {
-	// 	if value != nil {
-	// 		s3Log.Debugf("%s: %s", key, *value)
-	// 	} else {
-	// 		s3Log.Debugf("%s: <nil>\n", key)
-	// 	}
-	// }
-	// s3Log.Debugf("Exiting Headblob")
-	// return &HeadBlobOutput{
-	// 	BlobItemOutput: BlobItemOutput{
-	// 		Key:          &param.Key,
-	// 		ETag:         resp.ETag,
-	// 		LastModified: resp.LastModified,
-	// 		Size:         uint64(*resp.ContentLength),
-	// 		StorageClass: resp.StorageClass,
-	// 	},
-	// 	ContentType: resp.ContentType,
-	// 	Metadata:    metadataToLower(resp.Metadata),
-	// 	IsDirBlob:   strings.HasSuffix(param.Key, "/"),
-	// 	RequestId:   s.getRequestId(req),
-	// }, nil
+	req, resp := s.S3.HeadObjectRequest(&head)
+	err := req.Send()
+	if err != nil {
+		s3Log.Debug("leaving headblob error")
+		return nil, mapAwsError(err)
+	}
+	s3Log.Debug("Param.Key:" + param.Key + "\nIsDirBlob:" + strconv.FormatBool(strings.HasSuffix(param.Key, "/")))
+	s3Log.Debugf("Etag:%v, LastModified:%v, Size:%v, SC:%v, ContentType:%v, RequestId:%v",
+		resp.ETag, resp.LastModified, uint64(*resp.ContentLength), resp.StorageClass, resp.ContentType, s.getRequestId(req))
+	s3Log.Debugf("Resp.Metadata below")
+	for key, value := range resp.Metadata {
+		if value != nil {
+			s3Log.Debugf("%s: %s", key, *value)
+		} else {
+			s3Log.Debugf("%s: <nil>\n", key)
+		}
+	}
+	s3Log.Debugf("Exiting Headblob")
+	return &HeadBlobOutput{
+		BlobItemOutput: BlobItemOutput{
+			Key:          &param.Key,
+			ETag:         resp.ETag,
+			LastModified: resp.LastModified,
+			Size:         uint64(*resp.ContentLength),
+			StorageClass: resp.StorageClass,
+		},
+		ContentType: resp.ContentType,
+		Metadata:    metadataToLower(resp.Metadata),
+		IsDirBlob:   strings.HasSuffix(param.Key, "/"),
+		RequestId:   s.getRequestId(req),
+	}, nil
 
 	// New implementation below, this breaks and when trying to read a file on initial load (before navigating)
 	// Will convert a "folder" into a "file" making it impossible to navigate to without restarting
