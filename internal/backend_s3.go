@@ -367,12 +367,13 @@ func (s *S3Backend) getRequestId(r *request.Request) string {
 func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 	bucketAndKey := s.bucket + param.Key
 	bblah2 := os.Getenv("BUCKET_HOST") //fld9.s3....
-	bblah2 = "fld9"
+	bblah2 = "s3bucket"
 	s3Log.Debug("New Key:" + bucketAndKey + " and host:" + bblah2)
+
 	head := s3.HeadObjectInput{
 		//Bucket: &s.bucket, // this thing makes it no longer encode // test-zone-bucket-123
-		Bucket: &bblah2,       // with this it will escape
-		Key:    &bucketAndKey, // try using this for param.key over blah // /test-folder/bad,file.txt
+		Bucket: &bblah2,    // with this it will escape
+		Key:    &param.Key, // try using this for param.key over blah // /test-folder/bad,file.txt
 	}
 	// head := s3.HeadObjectInput{Bucket: &s.bucket,
 	// 	Key: &param.Key,
@@ -385,6 +386,8 @@ func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 	}
 
 	req, resp := s.S3.HeadObjectRequest(&head)
+	s3Log.Debugf("Request URI found:" + req.HTTPRequest.RequestURI)
+	//req.HTTPRequest.URL.
 	err := req.Send()
 	if err != nil {
 		return nil, mapAwsError(err)
