@@ -365,17 +365,19 @@ func (s *S3Backend) getRequestId(r *request.Request) string {
 // HEAD /1121045215484495542/1121045215484495542/.git/ HTTP/1.1
 
 func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
-	blah := s.bucket + param.Key
-	bblah2 := os.Getenv("BUCKET_HOST")
-	s3Log.Debug("New Key:" + blah + " and host:" + bblah2)
+	bucketAndKey := s.bucket + param.Key
+	bblah2 := os.Getenv("BUCKET_HOST") //fld9.s3....
+	bblah2 = "fld9"
+	s3Log.Debug("New Key:" + bucketAndKey + " and host:" + bblah2)
 	head := s3.HeadObjectInput{
-		//Bucket: &s.bucket, // this thing makes it no longer escape
-		Bucket: &bblah2,    // with this it will escape
-		Key:    &param.Key, // try using this for param.key over blah
+		//Bucket: &s.bucket, // this thing makes it no longer encode // test-zone-bucket-123
+		Bucket: &bblah2,       // with this it will escape
+		Key:    &bucketAndKey, // try using this for param.key over blah // /test-folder/bad,file.txt
 	}
 	// head := s3.HeadObjectInput{Bucket: &s.bucket,
 	// 	Key: &param.Key,
 	// }
+	//
 	if s.config.SseC != "" {
 		head.SSECustomerAlgorithm = PString("AES256")
 		head.SSECustomerKey = &s.config.SseC
