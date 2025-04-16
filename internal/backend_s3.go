@@ -359,14 +359,19 @@ func (s *S3Backend) getRequestId(r *request.Request) string {
 		r.HTTPResponse.Header.Get("x-amz-id-2")
 }
 
+// The issue here is we get
+// HEAD /fld9.s3.cloud.statcan.ca/1121045215484495542/jose/valid/invalid%2Cfile.txt/ with &bblah2 and &blah
+// And if we use &blah and s.bucket then we get
+// HEAD /1121045215484495542/1121045215484495542/.git/ HTTP/1.1
+
 func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 	blah := s.bucket + param.Key
 	bblah2 := os.Getenv("BUCKET_HOST")
 	s3Log.Debug("New Key:" + blah + " and host:" + bblah2)
 	head := s3.HeadObjectInput{
 		//Bucket: &s.bucket, // this thing makes it no longer escape
-		Bucket: &bblah2, // with this it will escape
-		Key:    &blah,   // try using this
+		Bucket: &bblah2,    // with this it will escape
+		Key:    &param.Key, // try using this for param.key over blah
 	}
 	// head := s3.HeadObjectInput{Bucket: &s.bucket,
 	// 	Key: &param.Key,
@@ -384,7 +389,7 @@ func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 	}
 	return &HeadBlobOutput{
 		BlobItemOutput: BlobItemOutput{
-			Key:          &blah, // try changing from param.key
+			Key:          &param.Key, // try changing from &blah
 			ETag:         resp.ETag,
 			LastModified: resp.LastModified,
 			Size:         uint64(*resp.ContentLength),
