@@ -752,11 +752,12 @@ func (s *S3Backend) CopyBlob(param *CopyBlobInput) (*CopyBlobOutput, error) {
 
 func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 	blah := s.bucket + param.Key
-	bblah2 := os.Getenv("BUCKET_HOST")
+	bblah2 := "s3bucket"
 	s3Log.Debug("New Key:" + blah + " and host:" + bblah2)
+
 	get := s3.GetObjectInput{
-		Bucket: &s.bucket, // this thing
-		Key:    &blah,
+		Bucket: &bblah2, // this thing
+		Key:    &param.Key,
 	}
 
 	if s.config.SseC != "" {
