@@ -363,8 +363,10 @@ func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 	blah := s.bucket + param.Key
 	bblah2 := os.Getenv("BUCKET_HOST")
 	s3Log.Debug("New Key:" + blah + " and host:" + bblah2)
-	head := s3.HeadObjectInput{Bucket: &s.bucket,
-		Key: &blah, // try using this
+	head := s3.HeadObjectInput{
+		//Bucket: &s.bucket, // this thing makes it no longer escape
+		Bucket: &bblah2, // with this it will escape
+		Key:    &blah,   // try using this
 	}
 	// head := s3.HeadObjectInput{Bucket: &s.bucket,
 	// 	Key: &param.Key,
@@ -447,7 +449,7 @@ func (s *S3Backend) ListBlobs(param *ListBlobsInput) (*ListBlobsOutput, error) {
 }
 
 func (s *S3Backend) DeleteBlob(param *DeleteBlobInput) (*DeleteBlobOutput, error) {
-	// TODO: Replace `Key` with bucket+key, `Bucket` can stay the same 
+	// TODO: Replace `Key` with bucket+key, `Bucket` can stay the same
 	req, _ := s.DeleteObjectRequest(&s3.DeleteObjectInput{
 		Bucket: &s.bucket,
 		Key:    &param.Key,
@@ -743,7 +745,7 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 	bblah2 := os.Getenv("BUCKET_HOST")
 	s3Log.Debug("New Key:" + blah + " and host:" + bblah2)
 	get := s3.GetObjectInput{
-		Bucket: &s.bucket,
+		Bucket: &s.bucket, // this thing
 		Key:    &blah,
 	}
 
@@ -801,7 +803,7 @@ func getDate(resp *http.Response) *time.Time {
 }
 
 func (s *S3Backend) PutBlob(param *PutBlobInput) (*PutBlobOutput, error) {
-	// TODO: Change `Key` to be combination of bucket and key, verify the request being sent 
+	// TODO: Change `Key` to be combination of bucket and key, verify the request being sent
 	storageClass := s.config.StorageClass
 	if param.Size != nil && *param.Size < 128*1024 && storageClass == "STANDARD_IA" {
 		storageClass = "STANDARD"
