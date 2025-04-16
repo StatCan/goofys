@@ -382,7 +382,7 @@ func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 	}
 	return &HeadBlobOutput{
 		BlobItemOutput: BlobItemOutput{
-			Key:          &param.Key, // does this need to change?
+			Key:          &blah, // try changing from param.key
 			ETag:         resp.ETag,
 			LastModified: resp.LastModified,
 			Size:         uint64(*resp.ContentLength),
@@ -447,6 +447,7 @@ func (s *S3Backend) ListBlobs(param *ListBlobsInput) (*ListBlobsOutput, error) {
 }
 
 func (s *S3Backend) DeleteBlob(param *DeleteBlobInput) (*DeleteBlobOutput, error) {
+	// TODO: Replace `Key` with bucket+key, `Bucket` can stay the same 
 	req, _ := s.DeleteObjectRequest(&s3.DeleteObjectInput{
 		Bucket: &s.bucket,
 		Key:    &param.Key,
@@ -772,7 +773,7 @@ func (s *S3Backend) GetBlob(param *GetBlobInput) (*GetBlobOutput, error) {
 	return &GetBlobOutput{
 		HeadBlobOutput: HeadBlobOutput{
 			BlobItemOutput: BlobItemOutput{
-				Key:          &param.Key, // does this need to change?
+				Key:          &blah, // try changing from param.Key
 				ETag:         resp.ETag,
 				LastModified: resp.LastModified,
 				Size:         uint64(*resp.ContentLength),
@@ -800,6 +801,7 @@ func getDate(resp *http.Response) *time.Time {
 }
 
 func (s *S3Backend) PutBlob(param *PutBlobInput) (*PutBlobOutput, error) {
+	// TODO: Change `Key` to be combination of bucket and key, verify the request being sent 
 	storageClass := s.config.StorageClass
 	if param.Size != nil && *param.Size < 128*1024 && storageClass == "STANDARD_IA" {
 		storageClass = "STANDARD"
