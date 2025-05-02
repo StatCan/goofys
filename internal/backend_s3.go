@@ -15,6 +15,9 @@
 package internal
 
 import (
+	"bytes"
+	"io"
+
 	. "github.com/StatCan/goofys/api/common"
 
 	"fmt"
@@ -638,7 +641,63 @@ func (s *S3Backend) copyObjectMultipart(size int64, from string, to string, mpuI
 	return
 }
 
+// CopyBlobV2 that does not use CopyObject since netapp does not support it
+// https://docs.netapp.com/us-en/ontap/s3-multiprotocol/index.html#s3-actions-and-functionality-not-currently-supported-by-s3-nas-buckets
+
+func (s *S3Backend) CopyBlobV2(param *CopyBlobInput) (*CopyBlobOutput, error) {
+	if param.Size == nil || param.ETag == nil || (param.Metadata == nil || param.StorageClass == nil) {
+		params := &HeadBlobInput{Key: param.Source}
+		resp, err := s.HeadBlob(params)
+		if err != nil {
+			return nil, err
+		}
+		if param.Metadata == nil {
+			param.Metadata = resp.Metadata
+		}
+	}
+
+	// Use Get and PutBlob implementations over copy object
+	getParams := &GetBlobInput{
+		Key: param.Source,
+	}
+	getResp, err := s.GetBlob(getParams)
+	if err != nil {
+		return nil, err
+	}
+
+	// Ensure we close the body when done
+	defer getResp.Body.Close()
+
+	// Read the entire content into memory...Is there a better way to do this
+	content, err := io.ReadAll(getResp.Body)
+	if err != nil {
+		return nil, err
+	}
+	// Create a ReadSeeker from the content
+	contentReader := bytes.NewReader(content)
+
+	putParams := &PutBlobInput{
+		Key:         param.Destination,
+		Body:        contentReader,
+		ContentType: getResp.ContentType,
+		Metadata:    param.Metadata, // can this be getResp.Metadata over param.Metadata?
+		//param.Metadata,
+		// dont need size or dirblob
+	}
+
+	putResp, err := s.PutBlob(putParams)
+	if err != nil {
+		return nil, err
+	}
+
+	return &CopyBlobOutput{putResp.RequestId}, nil
+}
+
 func (s *S3Backend) CopyBlob(param *CopyBlobInput) (*CopyBlobOutput, error) {
+	// Change to use CopyBlobV2, done here because changing references to `CopyBlob` requires more change than I'd like
+	// When CopyObject is supported we just remove CopyBlobV2 and this return statement
+	return s.CopyBlobV2(param)
+
 	metadataDirective := s3.MetadataDirectiveCopy
 	if param.Metadata != nil {
 		metadataDirective = s3.MetadataDirectiveReplace
