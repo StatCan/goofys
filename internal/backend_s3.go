@@ -645,6 +645,7 @@ func (s *S3Backend) copyObjectMultipart(size int64, from string, to string, mpuI
 // https://docs.netapp.com/us-en/ontap/s3-multiprotocol/index.html#s3-actions-and-functionality-not-currently-supported-by-s3-nas-buckets
 
 func (s *S3Backend) CopyBlobV2(param *CopyBlobInput) (*CopyBlobOutput, error) {
+	s3Log.Debug("Entering CopyBlobV2. This is a temporary measure until CopyObject is supported by netapp s3 nas buckets")
 	if param.Size == nil || param.ETag == nil || (param.Metadata == nil || param.StorageClass == nil) {
 		params := &HeadBlobInput{Key: param.Source}
 		resp, err := s.HeadBlob(params)
@@ -689,7 +690,7 @@ func (s *S3Backend) CopyBlobV2(param *CopyBlobInput) (*CopyBlobOutput, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	s3Log.Debug("Exiting CopyBlobV2")
 	return &CopyBlobOutput{putResp.RequestId}, nil
 }
 
