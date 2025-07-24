@@ -764,7 +764,8 @@ func (fs *Goofys) ForgetInode(
 		fs.mu.Lock()
 		defer fs.mu.Unlock()
 
-		// Fix ReadDir inode leak https://github.com/kahing/goofys/pull/786
+		// Fix ReadDir inode leak
+		// https://github.com/kahing/goofys/pull/786
 		if inode.isDir() {
 			for _, child := range inode.dir.Children {
 				if *child.Name == "." || *child.Name == ".." {
