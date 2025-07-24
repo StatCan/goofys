@@ -290,7 +290,7 @@ func (s *S3Backend) Init(key string) error {
 }
 
 func (s *S3Backend) ListObjectsV2(params *s3.ListObjectsV2Input) (*s3.ListObjectsV2Output, string, error) {
-	s3Log.Debugf("MATHIS TEST: params %v, backend %v", params, s)
+	s3Log.Debugf("ListObjectsV2: params %v, backend %v", params, s)
 	if s.aws {
 		req, resp := s.S3.ListObjectsV2Request(params)
 		err := req.Send()
@@ -317,7 +317,7 @@ func (s *S3Backend) ListObjectsV2(params *s3.ListObjectsV2Input) (*s3.ListObject
 		if err != nil {
 			return nil, "", err
 		}
-		s3Log.Debugf("MATHIS TEST: objs %v, err %v", objs, err)
+		s3Log.Debugf("ListObjectsV2: objs %v, err %v", objs, err)
 		count := int64(len(objs.Contents))
 		v2Objs := s3.ListObjectsV2Output{
 			CommonPrefixes:        objs.CommonPrefixes,
@@ -392,7 +392,7 @@ func (s *S3Backend) HeadBlob(param *HeadBlobInput) (*HeadBlobOutput, error) {
 
 func (s *S3Backend) ListBlobs(param *ListBlobsInput) (*ListBlobsOutput, error) {
 	var maxKeys *int64
-	s3Log.Debugf("MATHIS TEST")
+	s3Log.Debugf("ListBlobs")
 	if param.MaxKeys != nil {
 		maxKeys = aws.Int64(int64(*param.MaxKeys))
 	}
@@ -405,7 +405,7 @@ func (s *S3Backend) ListBlobs(param *ListBlobsInput) (*ListBlobsOutput, error) {
 		StartAfter:        param.StartAfter,
 		ContinuationToken: param.ContinuationToken,
 	})
-	s3Log.Debugf("MATHIS TEST: resp %v, reqid %v, err %v", resp, reqId, err)
+	s3Log.Debugf("ListBlobs: resp %v, reqid %v, err %v", resp, reqId, err)
 	if err != nil {
 		return nil, mapAwsError(err)
 	}
@@ -425,12 +425,12 @@ func (s *S3Backend) ListBlobs(param *ListBlobsInput) (*ListBlobsOutput, error) {
 			StorageClass: i.StorageClass,
 		})
 	}
-	s3Log.Debugf("MATHIS TEST: prefixes %v, items %v", prefixes, items)
+	s3Log.Debugf("ListBlobs: prefixes %v, items %v", prefixes, items)
 	isTruncatedFlag := false
 	if resp.IsTruncated != nil {
 		isTruncatedFlag = *resp.IsTruncated
 	} else {
-		s3Log.Debugf("MATHIS TEST: nil pointer catch")
+		s3Log.Debugf("ListBlobs: nil pointer catch")
 	}
 	return &ListBlobsOutput{
 		Prefixes:              prefixes,

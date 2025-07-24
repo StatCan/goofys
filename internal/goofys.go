@@ -771,6 +771,7 @@ func (fs *Goofys) ForgetInode(
 				if *child.Name == "." || *child.Name == ".." {
 					continue
 				}
+				s3Log.Debugf("Goofys Upstream PR: Inode Dir Leak fix")
 				delete(fs.inodes, child.Id)
 				fs.forgotCnt += 1
 			}
