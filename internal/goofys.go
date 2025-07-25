@@ -91,7 +91,8 @@ type Goofys struct {
 	replicators *Ticket
 	restorers   *Ticket
 
-	forgotCnt uint32
+	forgotCnt  uint32
+	blockCache *BlockCache
 }
 
 var s3Log = GetLogger("s3")
@@ -177,7 +178,9 @@ func newGoofys(ctx context.Context, bucket string, flags *FlagStorage,
 		flags:  flags,
 		umask:  0122,
 	}
-
+	if flags.BlockReadCache {
+		fs.blockCache = NewBlockCache(flags)
+	}
 	var prefix string
 	colon := strings.Index(bucket, ":")
 	if colon != -1 {
