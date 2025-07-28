@@ -40,8 +40,9 @@ func Mount(
 		fuseLog.Level = logrus.DebugLevel
 		log.Level = logrus.DebugLevel
 		mountCfg.DebugLogger = GetStdLogger(fuseLog, logrus.DebugLevel)
+	} else {
+		GetLogger("fuse").Level = logrus.InfoLevel
 	}
-
 	if flags.Backend == nil {
 		if spec, err := internal.ParseBucketSpec(bucketName); err == nil {
 			switch spec.Scheme {
