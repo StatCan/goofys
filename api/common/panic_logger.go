@@ -62,6 +62,10 @@ func (fs FusePanicLogger) ForgetInode(ctx context.Context, op *fuseops.ForgetIno
 	defer LogPanic(&err)
 	return fs.Fs.ForgetInode(ctx, op)
 }
+func (fs FusePanicLogger) BatchForget(ctx context.Context, op *fuseops.BatchForgetOp) (err error) {
+	defer LogPanic(&err)
+	return fs.Fs.BatchForget(ctx, op)
+}
 func (fs FusePanicLogger) MkDir(ctx context.Context, op *fuseops.MkDirOp) (err error) {
 	defer LogPanic(&err)
 	return fs.Fs.MkDir(ctx, op)
@@ -101,6 +105,14 @@ func (fs FusePanicLogger) OpenDir(ctx context.Context, op *fuseops.OpenDirOp) (e
 func (fs FusePanicLogger) ReadDir(ctx context.Context, op *fuseops.ReadDirOp) (err error) {
 	defer LogPanic(&err)
 	return fs.Fs.ReadDir(ctx, op)
+}
+func (fs FusePanicLogger) ReadDirPlus(ctx context.Context, op *fuseops.ReadDirPlusOp) (err error) {
+	defer LogPanic(&err)
+	return fs.Fs.ReadDirPlus(ctx, op)
+}
+func (fs FusePanicLogger) SyncFS(ctx context.Context, op *fuseops.SyncFSOp) (err error) {
+	defer LogPanic(&err)
+	return fs.Fs.SyncFS(ctx, op)
 }
 func (fs FusePanicLogger) ReleaseDirHandle(ctx context.Context, op *fuseops.ReleaseDirHandleOp) (err error) {
 	defer LogPanic(&err)
