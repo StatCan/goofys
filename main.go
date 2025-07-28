@@ -138,7 +138,7 @@ var Version = "use `make build' to fill version hash correctly"
 
 func main() {
 	// Changing just to make sure when I push im not using regular goofys still
-	VersionNumber = "0.42.0"
+	VersionNumber = "0.42.0-blockread"
 	VersionHash = Version
 
 	massagePath()

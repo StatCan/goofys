@@ -1,11 +1,11 @@
 package internal
 
 import (
-	. "github.com/kahing/goofys/api/common"
+	. "github.com/StatCan/goofys/api/common"
 
 	"sync"
 
-	"github.com/hashicorp/golang-lru/v2"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/jacobsa/fuse/fuseops"
 	"github.com/pbnjay/memory"
 )
