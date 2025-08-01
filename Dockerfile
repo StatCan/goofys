@@ -1,4 +1,4 @@
-FROM golang:1.20.7-alpine AS fusermount3-proxy-builder
+FROM golang:1.24.5-alpine AS fusermount3-proxy-builder
 
 # Install required build dependencies
 RUN apk update && apk upgrade && apk --no-cache add make gcc g++ libc-dev fuse-dev
@@ -8,7 +8,7 @@ ADD ./meta-fuse-csi-plugin .
 # Build the fusermount3-proxy
 RUN make fusermount3-proxy BINDIR=/bin
 
-FROM golang:1.20.7-alpine AS goofys-builder
+FROM golang:1.24.5-alpine AS goofys-builder
 
 # Install required build dependencies
 RUN apk update && apk upgrade && apk --no-cache add git make gcc g++ libc-dev fuse-dev
@@ -18,8 +18,8 @@ ADD . .
 # Build the goofys app
 RUN make build
 
-# 3.20.3 is the latest as of this commit (September 09 2024)
-FROM alpine:3.20.3
+# 3.22.1 is the latest as of this commit (August 01 2025)
+FROM alpine:3.22.1
 
 # Install necessary runtime dependencies
 RUN apk update && apk upgrade && apk --no-cache add ca-certificates bash wget
