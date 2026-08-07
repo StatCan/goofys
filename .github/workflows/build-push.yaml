@@ -10,8 +10,8 @@ on:
       - 'reopened'
 
 env:
-  REGISTRY_NAME: k8scc01covidacr
-  TRIVY_VERSION: "v0.43.1"
+  REGISTRY_NAME: stcthezoneacr
+  TRIVY_VERSION: "v0.72.0"
   HADOLINT_VERSION: "2.12.0"
 jobs:
   build-push:
